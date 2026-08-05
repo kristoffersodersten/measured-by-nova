@@ -37,7 +37,7 @@ The Mac Mini is the local control surface. Hetzner is the compute substrate.
 Use VS Code Remote SSH for normal work:
 
 ```text
-Remote host: hetzner-server
+Remote host: ubuntu
 Remote workspace: /home/krille/work/Measured by Nova
 ```
 

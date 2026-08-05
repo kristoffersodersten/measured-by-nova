@@ -3,7 +3,7 @@
 This repository's remote metabolic workspace is:
 
 ```text
-Host: hetzner-server
+Host: ubuntu
 Workspace: /home/krille/work/Measured by Nova
 ```
 
@@ -35,19 +35,19 @@ The following are invalid:
 Inspect without mutation:
 
 ```bash
-remote-compute-run --dry-run -- git status --short --branch
+remote-compute-run --host ubuntu --dry-run -- git status --short --branch
 ```
 
 Provision the remote workspace from a clean local checkout:
 
 ```bash
-remote-compute-provision
+remote-compute-provision --host ubuntu
 ```
 
 Run a remote command:
 
 ```bash
-remote-compute-run -- pnpm test
+remote-compute-run --host ubuntu -- pnpm test
 ```
 
 Audit the contract:

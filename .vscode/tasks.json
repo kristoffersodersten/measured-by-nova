@@ -10,25 +10,25 @@
     {
       "label": "Remote Compute: Dry run command",
       "type": "shell",
-      "command": "${env:HOME}/.codex/bin/remote-compute-run --dry-run -- ${input:remoteCommand}",
+      "command": "${env:HOME}/.codex/bin/remote-compute-run --host ubuntu --dry-run -- ${input:remoteCommand}",
       "problemMatcher": []
     },
     {
       "label": "Remote Compute: Run command on Hetzner",
       "type": "shell",
-      "command": "${env:HOME}/.codex/bin/remote-compute-run -- ${input:remoteCommand}",
+      "command": "${env:HOME}/.codex/bin/remote-compute-run --host ubuntu -- ${input:remoteCommand}",
       "problemMatcher": []
     },
     {
       "label": "Remote Compute: Provision workspace",
       "type": "shell",
-      "command": "${env:HOME}/.codex/bin/remote-compute-provision",
+      "command": "${env:HOME}/.codex/bin/remote-compute-provision --host ubuntu",
       "problemMatcher": []
     },
     {
       "label": "Remote Compute: Git status on Hetzner",
       "type": "shell",
-      "command": "${env:HOME}/.codex/bin/remote-compute-run --no-update -- git status --short --branch",
+      "command": "${env:HOME}/.codex/bin/remote-compute-run --host ubuntu --no-update -- git status --short --branch",
       "problemMatcher": []
     },
     {
