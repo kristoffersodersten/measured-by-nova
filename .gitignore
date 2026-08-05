@@ -8,7 +8,15 @@ blender/__pycache__/
 *.pyc
 .vitest/
 .coverage/
+coverage/
+.eslintcache
+*.log
 .env
 .env.*
 !.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+.codex-write-check
 .DS_Store
