@@ -1,0 +1,775 @@
+import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { describe, expect, it } from "vitest";
+import {
+  buildDigitalViewingAssetBundleManifest,
+  buildDigitalViewingRenderManifest,
+  DigitalViewingCaptureRepairSummarySchema,
+  DigitalViewingCaptureSchema,
+  DigitalViewingDeliveryPackageManifestSchema
+} from "../src/digitalViewingContracts.js";
+import { registerMeasurementTools } from "../src/measurementTools.js";
+
+type RegisteredTool = {
+  description: string;
+  handler: (input: unknown) => Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }>;
+};
+
+function loadCarportCapture(): unknown {
+  return JSON.parse(readFileSync("fixtures/digital-viewing-carport-capture.json", "utf8")) as unknown;
+}
+
+function loadVehicleCapture(): unknown {
+  return JSON.parse(readFileSync("fixtures/digital-viewing-vehicle-capture.json", "utf8")) as unknown;
+}
+
+const FullCarportAssetPaths = [
+  "photos/carport-detail-panel.jpg",
+  "photos/carport-east.jpg",
+  "photos/carport-south.jpg",
+  "photos/carport-west.jpg",
+  "textures/carport-stone-foundation-normal.png",
+  "textures/carport-stone-foundation-roughness.png",
+  "textures/carport-white-panel-normal.png",
+  "textures/carport-white-panel-roughness.png"
+];
+
+function assetFilesFor(paths: string[]): Array<{ path: string; sizeBytes: number; sha256: string; width: number; height: number }> {
+  return paths.map((assetPath, index) => ({
+    path: assetPath,
+    sizeBytes: 1024 + index,
+    sha256: (index + 1).toString(16).padStart(64, "0"),
+    width: assetPath.includes("detail") ? 2048 : 4096,
+    height: assetPath.startsWith("textures/") ? 4096 : assetPath.includes("detail") ? 2048 : 3072
+  }));
+}
+
+function blenderMeasurementApplicationsFor(capture: ReturnType<typeof DigitalViewingCaptureSchema.parse>) {
+  return capture.measurements.map((measurement) => ({
+    measurementId: measurement.id,
+    hostElementId: measurement.placement?.hostElementId ?? "carport",
+    referenceFrame: measurement.placement?.referenceFrame ?? "asset-local",
+    value: measurement.value,
+    unit: measurement.unit,
+    tolerance: measurement.tolerance,
+    sourceOfTruth: "declared-measurement-value-used-by-blender" as const
+  }));
+}
+
+function blenderTextureApplicationsFor(
+  renderManifest: ReturnType<typeof buildDigitalViewingRenderManifest>,
+  assetBundle: ReturnType<typeof buildDigitalViewingAssetBundleManifest>
+) {
+  const assetsByPath = new Map(assetBundle.assets.map((asset) => [asset.path, asset]));
+  return renderManifest.materials.flatMap((material) =>
+    material.textureMaps.map((textureMap) => {
+      const asset = assetsByPath.get(textureMap.path);
+      return {
+        path: textureMap.path,
+        type: textureMap.type,
+        colorSpace: textureMap.colorSpace,
+        scaleMm: textureMap.scaleMm,
+        pixelWidth: textureMap.pixelWidth,
+        pixelHeight: textureMap.pixelHeight,
+        ...(asset?.sizeBytes !== undefined ? { sizeBytes: asset.sizeBytes } : {}),
+        ...(asset?.sha256 !== undefined ? { sha256: asset.sha256 } : {})
+      };
+    })
+  );
+}
+
+function conditionSourcePhotoIdentitiesFor(
+  capture: ReturnType<typeof DigitalViewingCaptureSchema.parse>,
+  assetBundle: ReturnType<typeof buildDigitalViewingAssetBundleManifest>,
+  conditionId: string
+) {
+  const condition = capture.conditions.find((item) => item.id === conditionId);
+  const assetsByPath = new Map(assetBundle.assets.map((asset) => [asset.path, asset]));
+  return (condition?.photoSources ?? []).map((photoPath) => {
+    const asset = assetsByPath.get(photoPath);
+    return {
+      usage: "condition-source" as const,
+      path: photoPath,
+      ...(asset?.sizeBytes !== undefined ? { sizeBytes: asset.sizeBytes } : {}),
+      ...(asset?.sha256 !== undefined ? { sha256: asset.sha256 } : {})
+    };
+  });
+}
+
+function materialSourcePhotoIdentitiesFor(
+  renderManifest: ReturnType<typeof buildDigitalViewingRenderManifest>,
+  assetBundle: ReturnType<typeof buildDigitalViewingAssetBundleManifest>,
+  materialId: string
+) {
+  const material = renderManifest.materials.find((item) => item.materialId === materialId);
+  const assetsByPath = new Map(assetBundle.assets.map((asset) => [asset.path, asset]));
+  const entries = [
+    ...(material?.photoSources ?? []).map((photoPath) => ({ usage: "material-source" as const, path: photoPath })),
+    ...(material?.surfaceMapping?.sourcePhoto ? [{ usage: "surface-mapping" as const, path: material.surfaceMapping.sourcePhoto }] : []),
+    ...(material?.appearanceCalibration?.sourcePhoto ? [{ usage: "appearance-calibration" as const, path: material.appearanceCalibration.sourcePhoto }] : [])
+  ];
+  return entries.map((entry) => {
+    const asset = assetsByPath.get(entry.path);
+    return {
+      ...entry,
+      ...(asset?.sizeBytes !== undefined ? { sizeBytes: asset.sizeBytes } : {}),
+      ...(asset?.sha256 !== undefined ? { sha256: asset.sha256 } : {})
+    };
+  });
+}
+
+function photoIdentityFor(
+  assetBundle: ReturnType<typeof buildDigitalViewingAssetBundleManifest>,
+  photoPath: string
+) {
+  const asset = assetBundle.assets.find((item) => item.path === photoPath);
+  return {
+    path: photoPath,
+    ...(asset?.sizeBytes !== undefined ? { sizeBytes: asset.sizeBytes } : {}),
+    ...(asset?.sha256 !== undefined ? { sha256: asset.sha256 } : {})
+  };
+}
+
+function makeToolHarness(outputDir: string): Map<string, RegisteredTool> {
+  const tools = new Map<string, RegisteredTool>();
+  const server = {
+    tool(name: string, description: string, _shape: unknown, handler: RegisteredTool["handler"]) {
+      tools.set(name, { description, handler });
+    }
+  } as unknown as McpServer;
+
+  registerMeasurementTools(server, { outputDir, timeoutMs: 120_000 });
+  return tools;
+}
+
+describe("measurement MCP digital viewing tools", () => {
+  it("returns machine-readable capture guide checklists for UI capture flows", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
+    const tools = makeToolHarness(outputDir);
+    const tool = tools.get("get_digital_viewing_capture_guide");
+
+    expect(tool).toBeDefined();
+    expect(tool!.description).toContain("checklists");
+
+    const result = await tool!.handler({
+      assetType: "vehicle",
+      deliveryTier: "premium-sales"
+    });
+    const body = JSON.parse(result.content[0].text) as {
+      ok: boolean;
+      data?: {
+        guide: {
+          measurementChecklist: Array<{ measurementId: string; placementRequired: boolean }>;
+          materialChecklist: Array<{ category: string; requiredMaps: string[] }>;
+          inspectionChecklist: Array<{ zone: string; sourcePhotosRequired: boolean }>;
+        };
+      };
+    };
+
+    expect(result.isError).toBe(false);
+    expect(body.ok).toBe(true);
+    expect(body.data?.guide.measurementChecklist.map((item) => [item.measurementId, item.placementRequired])).toEqual([
+      ["overall-length", true],
+      ["overall-width", true],
+      ["overall-height", true],
+      ["wheelbase", true]
+    ]);
+    expect(body.data?.guide.materialChecklist.map((item) => [item.category, item.requiredMaps])).toEqual([
+      ["paint", ["baseColor", "normal", "roughness"]],
+      ["glass", ["alpha", "roughness"]],
+      ["rubber", ["normal", "roughness"]],
+      ["metal", ["metallic", "normal", "roughness"]],
+      ["leather", ["normal", "roughness"]]
+    ]);
+    expect(body.data?.guide.inspectionChecklist.map((item) => [item.zone, item.sourcePhotosRequired])).toEqual([
+      ["body", true],
+      ["glass", true],
+      ["wheels-tires", true],
+      ["interior", true]
+    ]);
+  });
+
+  it("returns capture guide checklists with failed preset validation details", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
+    const tools = makeToolHarness(outputDir);
+    const tool = tools.get("validate_digital_viewing_capture_preset");
+    const capture = DigitalViewingCaptureSchema.parse(loadVehicleCapture());
+
+    expect(tool).toBeDefined();
+
+    const result = await tool!.handler({
+      capture: {
+        ...capture,
+        photos: capture.photos.filter((photo) => photo.sector !== "interior")
+      },
+      deliveryTier: "premium-sales"
+    });
+    const body = JSON.parse(result.content[0].text) as {
+      ok: boolean;
+      error?: {
+        code: string;
+        details?: {
+          guide?: {
+            measurementChecklist: Array<{ measurementId: string }>;
+            materialChecklist: Array<{ category: string }>;
+            inspectionChecklist: Array<{ zone: string }>;
+          };
+          repairSummary?: {
+            ready: boolean;
+            sections: Array<{ section: string; blockingCount: number; blockingIds: string[] }>;
+          };
+          blocking?: Array<{ code: string; id: string }>;
+        };
+      };
+    };
+
+    expect(result.isError).toBe(true);
+    expect(body.ok).toBe(false);
+    expect(body.error?.code).toBe("digital_viewing_capture_not_ready");
+    expect(body.error?.details?.blocking).toContainEqual({
+      id: "sector-interior",
+      code: "required_sector_missing",
+      message: "Required capture sector is missing."
+    });
+    expect(body.error?.details?.guide?.measurementChecklist.map((item) => item.measurementId)).toEqual([
+      "overall-length",
+      "overall-width",
+      "overall-height",
+      "wheelbase"
+    ]);
+    expect(body.error?.details?.guide?.materialChecklist.map((item) => item.category)).toEqual([
+      "paint",
+      "glass",
+      "rubber",
+      "metal",
+      "leather"
+    ]);
+    expect(body.error?.details?.guide?.inspectionChecklist.map((item) => item.zone)).toEqual([
+      "body",
+      "glass",
+      "wheels-tires",
+      "interior"
+    ]);
+    const repairSummary = DigitalViewingCaptureRepairSummarySchema.parse(body.error?.details?.repairSummary);
+    expect(repairSummary).toEqual({
+      ready: false,
+      sections: [
+        {
+          section: "photos",
+          blockingCount: 3,
+          blockingIds: ["sector-interior", "sector-interior", "sector-interior"]
+        },
+        {
+          section: "materials",
+          blockingCount: 4,
+          blockingIds: [
+            "interior-leather:appearance-calibration",
+            "interior-leather:surface-mapping",
+            "material-surface-leather-seats",
+            "material-surface-leather-steering-wheel"
+          ]
+        },
+        {
+          section: "inspections",
+          blockingCount: 1,
+          blockingIds: ["inspection-zone-interior"]
+        }
+      ]
+    });
+  });
+
+  it("generates a pre-render asset-bundle readiness manifest without Blender execution", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
+    const tools = makeToolHarness(outputDir);
+    const tool = tools.get("generate_digital_viewing_asset_bundle_manifest");
+    const capture = DigitalViewingCaptureSchema.parse(loadCarportCapture());
+    const renderManifest = buildDigitalViewingRenderManifest(capture, {
+      presetId: "carport-site-southwest-preview",
+      deliveryTier: "premium-sales",
+      renderer: "cycles",
+      resolution: { width: 1600, height: 1000 },
+      camera: { mode: "perspective", sector: "south", focalLengthMm: 45, referencePhoto: "photos/carport-south.jpg" },
+      lighting: { environment: "site-reference", colorTemperatureK: 5600, intensity: 0.75, referencePhoto: "photos/carport-south.jpg" },
+      outputPath: "renders/carport-southwest.png"
+    });
+
+    expect(tool).toBeDefined();
+    expect(tool!.description).toContain("pre-render");
+
+    const result = await tool!.handler({
+      capture,
+      renderManifest,
+      existingFiles: [
+        "photos/carport-south.jpg",
+        "photos/carport-west.jpg",
+        "textures/carport-white-panel-normal.png",
+        "textures/carport-white-panel-roughness.png"
+      ],
+      outputPath: "asset-bundles/carport-southwest.asset-bundle.json"
+    });
+    const body = JSON.parse(result.content[0].text) as {
+      ok: boolean;
+      data?: {
+        assetBundlePath: string;
+        assetBundle: {
+          notGeometryAuthority: boolean;
+          summary: { ready: boolean; missingCount: number };
+          qualityGates: { blocking: Array<{ code: string; id: string }> };
+        };
+      };
+      error?: { code: string; details?: { blocking?: Array<{ code: string; id: string }> } };
+    };
+
+    expect(result.isError).toBe(true);
+    expect(body.ok).toBe(false);
+    expect(body.error?.code).toBe("digital_viewing_asset_bundle_not_ready");
+    expect(body.error?.details?.blocking?.map((reason) => [reason.code, reason.id])).toEqual([
+      ["asset_file_missing", "photos/carport-detail-panel.jpg"],
+      ["asset_file_missing", "photos/carport-east.jpg"],
+      ["asset_file_missing", "textures/carport-stone-foundation-normal.png"],
+      ["asset_file_missing", "textures/carport-stone-foundation-roughness.png"]
+    ]);
+
+    const written = JSON.parse(await readFile(path.join(outputDir, "asset-bundles/carport-southwest.asset-bundle.json"), "utf8")) as {
+      notGeometryAuthority: boolean;
+      summary: { ready: boolean; missingCount: number };
+    };
+    expect(written.notGeometryAuthority).toBe(true);
+    expect(written.summary).toEqual({ ready: false, requiredCount: 9, missingCount: 4, warningCount: 0 });
+  });
+
+  it("can scan the configured output directory for prepared bundle files", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
+    const files = [
+      "photos/carport-detail-panel.jpg",
+      "photos/carport-east.jpg",
+      "photos/carport-south.jpg",
+      "photos/carport-west.jpg",
+      "textures/carport-stone-foundation-normal.png",
+      "textures/carport-stone-foundation-roughness.png",
+      "textures/carport-white-panel-normal.png",
+      "textures/carport-white-panel-roughness.png"
+    ];
+    for (const file of files) {
+      const absolute = path.join(outputDir, file);
+      await mkdir(path.dirname(absolute), { recursive: true });
+      await writeFile(absolute, "fixture", "utf8");
+    }
+    const tools = makeToolHarness(outputDir);
+    const tool = tools.get("generate_digital_viewing_asset_bundle_manifest");
+    const capture = DigitalViewingCaptureSchema.parse(loadCarportCapture());
+    const renderManifest = buildDigitalViewingRenderManifest(capture, {
+      presetId: "carport-site-southwest-preview",
+      deliveryTier: "premium-sales",
+      renderer: "cycles",
+      resolution: { width: 1600, height: 1000 },
+      camera: { mode: "perspective", sector: "south", focalLengthMm: 45, referencePhoto: "photos/carport-south.jpg" },
+      lighting: { environment: "site-reference", colorTemperatureK: 5600, intensity: 0.75, referencePhoto: "photos/carport-south.jpg" },
+      outputPath: "renders/carport-southwest.png"
+    });
+
+    const result = await tool!.handler({
+      capture,
+      renderManifest,
+      scanOutputDir: true,
+      outputPath: "asset-bundles/carport-southwest.asset-bundle.json"
+    });
+    const body = JSON.parse(result.content[0].text) as {
+      ok: boolean;
+      data?: {
+        assetBundle: {
+          summary: { ready: boolean; missingCount: number };
+          assets: Array<{ path: string; status: string; sizeBytes?: number; sha256?: string }>;
+        };
+      };
+    };
+
+    expect(result.isError).toBe(false);
+    expect(body.ok).toBe(true);
+    expect(body.data?.assetBundle.summary).toEqual({ ready: true, requiredCount: 9, missingCount: 0, warningCount: 0 });
+    expect(body.data?.assetBundle.assets.map((asset) => [asset.path, asset.status])).toContainEqual([
+      "photos/carport-east.jpg",
+      "present"
+    ]);
+    expect(body.data?.assetBundle.assets.find((asset) => asset.path === "photos/carport-east.jpg")).toMatchObject({
+      sizeBytes: 7,
+      sha256: createHash("sha256").update("fixture").digest("hex")
+    });
+  });
+
+  it("returns photoreal quality checklist from delivery package generation", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
+    const tools = makeToolHarness(outputDir);
+    const tool = tools.get("generate_digital_viewing_delivery_package");
+    const capture = DigitalViewingCaptureSchema.parse(loadCarportCapture());
+    const renderManifest = buildDigitalViewingRenderManifest(capture, {
+      presetId: "carport-site-southwest-preview",
+      deliveryTier: "premium-sales",
+      renderer: "cycles",
+      resolution: { width: 1600, height: 1000 },
+      camera: { mode: "perspective", sector: "south", focalLengthMm: 45, referencePhoto: "photos/carport-south.jpg" },
+      lighting: { environment: "site-reference", colorTemperatureK: 5600, intensity: 0.75, referencePhoto: "photos/carport-south.jpg" },
+      outputPath: "renders/carport-southwest.png"
+    });
+    const assetBundle = buildDigitalViewingAssetBundleManifest(capture, renderManifest, {
+      existingFiles: FullCarportAssetPaths,
+      assetFiles: assetFilesFor(FullCarportAssetPaths)
+    });
+    const stone = renderManifest.materials.find((material) => material.materialId === "dark-stone-foundation");
+    const wood = renderManifest.materials.find((material) => material.materialId === "painted-white-wood-panel");
+    expect(stone).toBeDefined();
+    expect(wood).toBeDefined();
+    const executedRenderManifest = {
+      ...renderManifest,
+      blenderExecution: {
+        measurementApplication: {
+          applied: blenderMeasurementApplicationsFor(capture)
+        },
+        materialApplication: {
+          applied: [
+            {
+              object: "foundation-wall",
+              materialId: "dark-stone-foundation",
+              sourcePhotoIdentities: materialSourcePhotoIdentitiesFor(renderManifest, assetBundle, "dark-stone-foundation"),
+              pbr: stone!.pbr,
+              pbrReadback: {
+                sourceOfTruth: "read-from-blender-material-node-values-after-application",
+                fields: ["baseColor", "metallic", "normalSource", "roughness", "specular", "textureScaleMm", "transmission"],
+                values: stone!.pbr
+              },
+              surfaceMapping: { projection: "box", faces: ["front", "left", "right"], scaleMm: 500, rotationDeg: 0, sourcePhoto: "photos/carport-south.jpg" },
+              appearanceCalibration: { method: "white-balance-reference", sourcePhoto: "photos/carport-south.jpg", illuminant: "daylight", confidence: "medium" }
+            },
+            {
+              object: "cladding-southwest",
+              materialId: "painted-white-wood-panel",
+              sourcePhotoIdentities: materialSourcePhotoIdentitiesFor(renderManifest, assetBundle, "painted-white-wood-panel"),
+              pbr: wood!.pbr,
+              pbrReadback: {
+                sourceOfTruth: "read-from-blender-material-node-values-after-application",
+                fields: ["baseColor", "metallic", "normalSource", "roughness", "specular", "textureScaleMm", "transmission"],
+                values: wood!.pbr
+              },
+              surfaceMapping: { projection: "planar", faces: ["front"], scaleMm: 900, rotationDeg: 0, sourcePhoto: "photos/carport-west.jpg" },
+              appearanceCalibration: { method: "white-balance-reference", sourcePhoto: "photos/carport-west.jpg", illuminant: "daylight", confidence: "medium" }
+            }
+          ],
+          textures: {
+            applied: blenderTextureApplicationsFor(renderManifest, assetBundle)
+          }
+        },
+        conditionApplication: {
+          applied: [
+            {
+              conditionId: "white-panel-weathering",
+              hostElementId: "cladding-southwest",
+              face: "front",
+              sourcePhotoIdentities: conditionSourcePhotoIdentitiesFor(capture, assetBundle, "white-panel-weathering"),
+              surfacePlacement: {
+                hostElementId: "cladding-southwest",
+                face: "front",
+                u: 0.5,
+                v: 0.52,
+                widthMm: 1800,
+                heightMm: 40,
+                rotationDeg: 0
+              },
+              visibilityProof: {
+                sourceOfTruth: "created-visible-blender-overlay-object",
+                objectName: "condition-white-panel-weathering",
+                materialName: "condition-white-panel-weathering",
+                visibleInRender: true,
+                dimensionsMm: {
+                  widthMm: 1800,
+                  heightMm: 40
+                },
+                materialReadback: {
+                  sourceOfTruth: "read-from-blender-condition-material-after-application",
+                  baseColor: "#b0b0a8",
+                  alpha: 1,
+                  roughness: 0.82,
+                  metallic: 0,
+                  conditionType: "wear",
+                  severity: "low"
+                }
+              }
+            }
+          ]
+        },
+        camera: {
+          cameraName: "Measured_Render_south",
+          sector: "south",
+          mode: "perspective",
+          referencePhoto: "photos/carport-south.jpg",
+          referencePhotoIdentity: photoIdentityFor(assetBundle, "photos/carport-south.jpg"),
+          executedYawDeg: 0,
+          executedPitchDeg: 0
+        },
+        lighting: {
+          lights: ["Measured_Render_Key_Area", "Measured_Render_Fill_Area"],
+          environment: "site-reference",
+          referencePhoto: "photos/carport-south.jpg",
+          referencePhotoIdentity: photoIdentityFor(assetBundle, "photos/carport-south.jpg"),
+          lightingReference: "daylight",
+          colorReference: "known-white-reference",
+          whiteBalanceKelvin: 5600,
+          exposureEv: 0
+        },
+        renderQuality: {
+          renderer: "cycles",
+          samples: 64,
+          denoise: true,
+          resolution: { width: 1600, height: 1000 },
+          filmTransparent: false,
+          viewTransform: "Filmic",
+          look: "Medium High Contrast",
+          exposure: 0,
+          gamma: 1,
+          worldColor: "#c7d1db"
+        },
+        renderArtifact: {
+          path: "renders/carport-southwest.png",
+          sizeBytes: 9283,
+          sha256: "a".repeat(64),
+          width: 1600,
+          height: 1000
+        },
+        referenceComparison: {
+          referencePhoto: "photos/carport-south.jpg",
+          renderPath: "renders/carport-southwest.png",
+          method: "luma-grid-rmse" as const,
+          score: 0.86,
+          threshold: 0.75
+        },
+        assetBundle: {
+          manifestType: "digital-viewing-asset-bundle" as const,
+          ready: true,
+          assetBundleHash: assetBundle.hashes.assetBundleHash,
+          requiredCount: assetBundle.summary.requiredCount,
+          missingCount: assetBundle.summary.missingCount
+        }
+      }
+    };
+
+    expect(tool).toBeDefined();
+    expect(tool!.description).toContain("quality checklist");
+
+    const result = await tool!.handler({
+      capture,
+      renderManifest: executedRenderManifest,
+      assetBundleManifest: assetBundle,
+      assetBundleManifestPath: "asset-bundles/carport-southwest.asset-bundle.json",
+      deliveryTargets: ["photoreal-render", "material-condition-report"]
+    });
+    const body = JSON.parse(result.content[0].text) as {
+      ok: boolean;
+      data?: { deliveryPackage?: unknown };
+    };
+    const deliveryPackage = DigitalViewingDeliveryPackageManifestSchema.parse(body.data?.deliveryPackage);
+
+    expect(result.isError).toBe(false);
+    expect(body.ok).toBe(true);
+    expect(deliveryPackage.qualityGates.ready).toBe(true);
+    expect(deliveryPackage.customerReadinessSummary).toMatchObject({
+      customerSurface: "internal-review",
+      status: "ready",
+      requiredTargetCount: 2,
+      readyRequiredTargetCount: 2,
+      missingRequiredTargetCount: 0,
+      failedQualityCheckCount: 0
+    });
+    expect(deliveryPackage.renderQualityCoverage).toMatchObject({
+      status: "ready",
+      declared: {
+        renderer: "cycles",
+        deliveryTier: "premium-sales"
+      },
+      executed: {
+        renderer: "cycles",
+        samples: 64,
+        denoise: true,
+        viewTransform: "Filmic",
+        exposure: 0,
+        gamma: 1
+      }
+    });
+    expect(deliveryPackage.renderQualityCoverage.checks.map((entry) => [entry.check, entry.status])).toEqual([
+      ["renderer", "passed"],
+      ["sampling", "passed"],
+      ["resolution", "passed"],
+      ["color-management", "passed"],
+      ["background", "passed"]
+    ]);
+    expect(deliveryPackage.photoEvidenceCoverage).toMatchObject({
+      verifiedPhotoCount: 5,
+      evidenceCount: 22,
+      missingEvidenceCount: 0
+    });
+    expect(deliveryPackage.photoEvidenceCoverage.entries.map((entry) => [entry.usage, entry.targetId, entry.path])).toContainEqual([
+      "camera-reference",
+      "south",
+      "photos/carport-south.jpg"
+    ]);
+    expect(deliveryPackage.photoEvidenceCoverage.entries.map((entry) => [entry.usage, entry.targetId, entry.path])).toContainEqual([
+      "condition-evidence",
+      "white-panel-weathering",
+      "photos/carport-detail-panel.jpg"
+    ]);
+    expect(deliveryPackage.photoEvidenceCoverage.entries.map((entry) => [entry.usage, entry.targetId, entry.path])).toContainEqual([
+      "inspection-source",
+      "foundation",
+      "photos/carport-west.jpg"
+    ]);
+    expect(deliveryPackage.captureAngleCoverage).toMatchObject({
+      presetId: "exterior-structure-premium-sales",
+      requiredShotCount: 5,
+      matchedShotCount: 5,
+      missingShotCount: 0,
+      mismatchedShotCount: 0
+    });
+    expect(deliveryPackage.captureAngleCoverage.entries.map((entry) => [entry.sector, entry.selectedPhotoPath, entry.status])).toEqual([
+      ["north", "photos/carport-north.jpg", "matched"],
+      ["south", "photos/carport-south.jpg", "matched"],
+      ["east", "photos/carport-east.jpg", "matched"],
+      ["west", "photos/carport-west.jpg", "matched"],
+      ["detail", "photos/carport-detail-panel.jpg", "matched"]
+    ]);
+    expect(deliveryPackage.measurementEvidenceCoverage).toMatchObject({
+      geometryMeasurementCount: 8,
+      appliedAnchorCount: 8,
+      missingAnchorCount: 0
+    });
+    expect(deliveryPackage.measurementEvidenceCoverage.entries.map((entry) => [entry.measurementId, entry.value, entry.unit, entry.blenderAnchorStatus])).toContainEqual([
+      "overall-width",
+      7676,
+      "mm",
+      "applied"
+    ]);
+    expect(deliveryPackage.measurementEvidenceCoverage.entries.map((entry) => [entry.measurementId, entry.hostElementId, entry.referenceFrame])).toContainEqual([
+      "neighbor-boundary-distance",
+      "outermost-southwest-post",
+      "site-local"
+    ]);
+    expect(deliveryPackage.dimensionOverlayCoverage).toMatchObject({
+      overlayCandidateCount: 8,
+      overlayReadyCount: 8,
+      overlayBlockedCount: 0
+    });
+    expect(deliveryPackage.dimensionOverlayCoverage.entries.map((entry) => [
+      entry.measurementId,
+      entry.overlayStatus,
+      entry.displayLabel
+    ])).toContainEqual([
+      "overall-width",
+      "ready",
+      "Carport width: 7676 mm"
+    ]);
+    expect(deliveryPackage.viewerLayerCoverage).toMatchObject({
+      layerCount: 5,
+      readyLayerCount: 4,
+      blockedLayerCount: 0,
+      notRequestedLayerCount: 1
+    });
+    expect(deliveryPackage.viewerLayerCoverage.entries.map((entry) => [entry.layer, entry.status])).toEqual([
+      ["photoreal-scene", "ready"],
+      ["material-fidelity", "ready"],
+      ["condition-disclosure", "ready"],
+      ["dimension-overlays", "ready"],
+      ["web-delivery", "not-requested"]
+    ]);
+    expect(deliveryPackage.materialRenderCoverage).toMatchObject({
+      materialCount: 2,
+      hostTargetedMaterialCount: 2,
+      appliedMaterialCount: 2,
+      missingMaterialCount: 0,
+      textureMapCount: 4,
+      appliedTextureMapCount: 4,
+      missingTextureMapCount: 0
+    });
+    expect(deliveryPackage.materialRenderCoverage.entries.map((entry) => [entry.materialId, entry.materialRenderStatus])).toEqual([
+      ["dark-stone-foundation", "applied"],
+      ["painted-white-wood-panel", "applied"]
+    ]);
+    expect(deliveryPackage.pbrMaterialCompletenessCoverage).toMatchObject({
+      materialCount: 2,
+      completeMaterialCount: 2,
+      incompleteMaterialCount: 0,
+      photoNormalSourceCount: 2,
+      textureScaleDeclaredCount: 2
+    });
+    expect(deliveryPackage.pbrMaterialCompletenessCoverage.entries.map((entry) => [entry.materialId, entry.completenessStatus, entry.missingTextureTypes])).toEqual([
+      ["dark-stone-foundation", "complete", []],
+      ["painted-white-wood-panel", "complete", []]
+    ]);
+    expect(deliveryPackage.renderExecutionCoverage).toMatchObject({
+      renderer: "cycles",
+      renderPath: "renders/carport-southwest.png",
+      manifestPath: "renders/carport-southwest.manifest.json",
+      camera: {
+        declaredSector: "south",
+        executedSector: "south",
+        status: "matched"
+      },
+      lighting: {
+        declaredEnvironment: "site-reference",
+        executedEnvironment: "site-reference",
+        status: "matched"
+      },
+      assetBundle: {
+        status: "matched",
+        declaredHash: assetBundle.hashes.assetBundleHash,
+        executedHash: assetBundle.hashes.assetBundleHash
+      }
+    });
+    expect(deliveryPackage.renderReferenceComparisonCoverage).toMatchObject({
+      required: true,
+      referencePhoto: "photos/carport-south.jpg",
+      renderPath: "renders/carport-southwest.png",
+      method: "luma-grid-rmse",
+      score: 0.86,
+      threshold: 0.75,
+      status: "matched"
+    });
+    expect(deliveryPackage.conditionRenderCoverage).toMatchObject({
+      verifiedConditionCount: 1,
+      visibleConditionCount: 1,
+      appliedConditionCount: 1,
+      missingConditionCount: 0,
+      inspectionZoneCount: 5,
+      verifiedInspectionZoneCount: 5,
+      defectFoundZoneCount: 1
+    });
+    expect(deliveryPackage.conditionRenderCoverage.entries.map((entry) => [entry.conditionId, entry.conditionRenderStatus, entry.placementStatus])).toEqual([
+      ["white-panel-weathering", "applied", "matched"]
+    ]);
+    expect(deliveryPackage.conditionOverlayCoverage).toMatchObject({
+      overlayCandidateCount: 1,
+      overlayReadyCount: 1,
+      overlayBlockedCount: 0
+    });
+    expect(deliveryPackage.conditionOverlayCoverage.entries.map((entry) => [
+      entry.conditionId,
+      entry.overlayStatus,
+      entry.displayLabel
+    ])).toEqual([
+      ["white-panel-weathering", "ready", "wear: low severity"]
+    ]);
+    expect(deliveryPackage.photorealQualityChecklist.map((item) => [item.check, item.status])).toEqual([
+      ["asset-bundle", "passed"],
+      ["render-output", "passed"],
+      ["measurements", "passed"],
+      ["materials", "passed"],
+      ["textures", "passed"],
+      ["conditions", "passed"],
+      ["camera", "passed"],
+      ["lighting", "passed"]
+    ]);
+    expect(deliveryPackage.photorealQualityChecklist.every((item) => item.trace.captureHash === deliveryPackage.hashes.captureHash)).toBe(true);
+    expect(deliveryPackage.photorealQualityChecklist.every((item) => item.trace.renderManifestHash === deliveryPackage.hashes.renderManifestHash)).toBe(true);
+    expect(deliveryPackage.photorealQualityChecklist.some((item) => item.trace.materialConditionReportHash === deliveryPackage.hashes.materialConditionReportHash)).toBe(true);
+  });
+});

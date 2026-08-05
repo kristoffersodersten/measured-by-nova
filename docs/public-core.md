@@ -55,7 +55,13 @@ Product:
 Measured by Nova
 ```
 
-Repository/package:
+Repository:
+
+```text
+measured-by-nova
+```
+
+Package:
 
 ```text
 nova-measured
@@ -68,4 +74,3 @@ codex-blender-mcp
 ```
 
 The legacy alias exists only for compatibility and should not be used in public positioning.
-

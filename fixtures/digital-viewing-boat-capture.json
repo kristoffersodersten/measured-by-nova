@@ -1,0 +1,722 @@
+{
+  "schemaVersion": 1,
+  "captureId": "boat-demo-capture",
+  "projectId": "boat-demo",
+  "assetType": "boat",
+  "unit": "mm",
+  "requiredSectors": [
+    "bow",
+    "stern",
+    "port",
+    "starboard",
+    "deck",
+    "cabin",
+    "detail"
+  ],
+  "modelElements": [
+    {
+      "id": "hull",
+      "kind": "body",
+      "renderable": true,
+      "confidence": "high",
+      "source": "measured_geometry"
+    },
+    {
+      "id": "deck-surface",
+      "kind": "surface",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    },
+    {
+      "id": "windshield-glass",
+      "kind": "surface",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    },
+    {
+      "id": "stainless-fittings",
+      "kind": "surface",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    },
+    {
+      "id": "canvas-upholstery",
+      "kind": "surface",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    },
+    {
+      "id": "cabin-interior",
+      "kind": "surface",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    }
+  ],
+  "measurements": [
+    {
+      "id": "loa",
+      "label": "Length overall",
+      "value": 8420,
+      "unit": "mm",
+      "confidence": "high",
+      "verified": true,
+      "source": "manual_measurement",
+      "placement": {
+        "hostElementId": "hull",
+        "axis": "x",
+        "from": "bow foremost point",
+        "to": "stern outer transom plane",
+        "referenceFrame": "asset-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 5
+    },
+    {
+      "id": "beam",
+      "label": "Beam",
+      "value": 2680,
+      "unit": "mm",
+      "confidence": "high",
+      "verified": true,
+      "source": "manual_measurement",
+      "placement": {
+        "hostElementId": "hull",
+        "axis": "y",
+        "from": "port widest point",
+        "to": "starboard widest point",
+        "referenceFrame": "asset-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 5
+    },
+    {
+      "id": "draft",
+      "label": "Draft",
+      "value": 820,
+      "unit": "mm",
+      "confidence": "medium",
+      "verified": true,
+      "source": "manual_measurement",
+      "placement": {
+        "hostElementId": "hull",
+        "axis": "z",
+        "from": "waterline reference",
+        "to": "lowest keel point",
+        "referenceFrame": "asset-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 5
+    }
+  ],
+  "photos": [
+    {
+      "path": "photos/boat-bow.jpg",
+      "sector": "bow",
+      "role": "geometry_alignment",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": 0,
+        "pitchDeg": 0,
+        "focalLength35mmEquivalent": 50,
+        "cameraDistanceMm": 10000,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/boat-stern.jpg",
+      "sector": "stern",
+      "role": "geometry_alignment",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": 180,
+        "pitchDeg": 0,
+        "focalLength35mmEquivalent": 50,
+        "cameraDistanceMm": 10000,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/boat-port.jpg",
+      "sector": "port",
+      "role": "material",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": -90,
+        "pitchDeg": 0,
+        "focalLength35mmEquivalent": 50,
+        "cameraDistanceMm": 10000,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/boat-starboard.jpg",
+      "sector": "starboard",
+      "role": "material",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": 90,
+        "pitchDeg": 0,
+        "focalLength35mmEquivalent": 50,
+        "cameraDistanceMm": 10000,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/boat-deck.jpg",
+      "sector": "deck",
+      "role": "material",
+      "verified": true,
+      "anchorsVisible": false,
+      "captureMetadata": {
+        "angleType": "interior",
+        "cameraMode": "perspective-reference",
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-sector",
+        "occluded": false,
+        "lightingReference": "mixed-measured",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/boat-cabin.jpg",
+      "sector": "cabin",
+      "role": "material",
+      "verified": true,
+      "anchorsVisible": false,
+      "captureMetadata": {
+        "angleType": "interior",
+        "cameraMode": "perspective-reference",
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-sector",
+        "occluded": false,
+        "lightingReference": "mixed-measured",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/boat-detail.jpg",
+      "sector": "detail",
+      "role": "condition",
+      "verified": true,
+      "anchorsVisible": false,
+      "captureMetadata": {
+        "angleType": "detail",
+        "cameraMode": "macro-detail",
+        "pitchGuidance": "surface-normal",
+        "lensGuidance": "macro-detail",
+        "coverage": "condition-detail",
+        "occluded": false
+      },
+      "pixelWidth": 2048,
+      "pixelHeight": 2048
+    }
+  ],
+  "materials": [
+    {
+      "materialId": "hull-gelcoat",
+      "hostElementId": "hull",
+      "presetId": "marine-gelcoat",
+      "materialSurfaces": [
+        "hull",
+        "deck"
+      ],
+      "category": "gelcoat",
+      "baseColor": "#f8f8f0",
+      "roughness": 0.31,
+      "metallic": 0,
+      "specular": 0.68,
+      "normalSource": "photo",
+      "textureScaleMm": 1600,
+      "surfaceMapping": {
+        "projection": "box",
+        "faces": [
+          "front",
+          "rear",
+          "left",
+          "right"
+        ],
+        "scaleMm": 1600,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/boat-port.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/boat-port.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "baseColor",
+          "path": "textures/hull-gelcoat-basecolor.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "sRGB",
+          "scaleMm": 1600,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/boat-port.jpg"
+        },
+        {
+          "type": "normal",
+          "path": "textures/hull-gelcoat-normal.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 1600,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/boat-port.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/hull-gelcoat-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 1600,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/boat-starboard.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/boat-port.jpg",
+        "photos/boat-starboard.jpg"
+      ],
+      "notes": "White gelcoat requires source-backed color and finish evidence for premium marine listings."
+    },
+    {
+      "materialId": "windshield-glass",
+      "hostElementId": "windshield-glass",
+      "presetId": "clear-glass",
+      "materialSurfaces": [
+        "windscreen",
+        "portlights"
+      ],
+      "category": "glass",
+      "baseColor": "#dfefff",
+      "roughness": 0.05,
+      "metallic": 0,
+      "specular": 0.9,
+      "transmission": 0.68,
+      "normalSource": "none",
+      "textureScaleMm": 1000,
+      "surfaceMapping": {
+        "projection": "box",
+        "faces": [
+          "front",
+          "left",
+          "right"
+        ],
+        "scaleMm": 1000,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/boat-bow.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/boat-bow.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "alpha",
+          "path": "textures/boat-glass-alpha.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 1000,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/boat-bow.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/boat-glass-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 1000,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/boat-starboard.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/boat-bow.jpg",
+        "photos/boat-starboard.jpg"
+      ]
+    },
+    {
+      "materialId": "stainless-fittings",
+      "hostElementId": "stainless-fittings",
+      "presetId": "brushed-metal",
+      "materialSurfaces": [
+        "rails",
+        "cleats",
+        "fittings"
+      ],
+      "category": "metal",
+      "baseColor": "#c8c9c7",
+      "roughness": 0.28,
+      "metallic": 1,
+      "specular": 0.7,
+      "normalSource": "photo",
+      "textureScaleMm": 300,
+      "surfaceMapping": {
+        "projection": "uv",
+        "faces": [
+          "left",
+          "right",
+          "top"
+        ],
+        "scaleMm": 300,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/boat-starboard.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/boat-starboard.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "metallic",
+          "path": "textures/boat-fittings-metallic.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 300,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/boat-starboard.jpg"
+        },
+        {
+          "type": "normal",
+          "path": "textures/boat-fittings-normal.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 300,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/boat-starboard.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/boat-fittings-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 300,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/boat-port.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/boat-port.jpg",
+        "photos/boat-starboard.jpg"
+      ]
+    },
+    {
+      "materialId": "canvas-upholstery",
+      "hostElementId": "canvas-upholstery",
+      "presetId": "matte-plastic",
+      "materialSurfaces": [
+        "upholstery",
+        "canvas"
+      ],
+      "category": "fabric",
+      "baseColor": "#e6e2d4",
+      "roughness": 0.74,
+      "metallic": 0,
+      "specular": 0.22,
+      "normalSource": "photo",
+      "textureScaleMm": 450,
+      "surfaceMapping": {
+        "projection": "uv",
+        "faces": [
+          "top",
+          "front"
+        ],
+        "scaleMm": 450,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/boat-deck.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/boat-deck.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "normal",
+          "path": "textures/boat-canvas-normal.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 450,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/boat-deck.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/boat-canvas-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 450,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/boat-deck.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/boat-deck.jpg"
+      ]
+    },
+    {
+      "materialId": "cabin-wood",
+      "hostElementId": "cabin-interior",
+      "presetId": "natural-wood",
+      "materialSurfaces": [
+        "deck-trim",
+        "interior-joinery"
+      ],
+      "category": "wood",
+      "baseColor": "#a2764a",
+      "roughness": 0.56,
+      "metallic": 0,
+      "specular": 0.3,
+      "normalSource": "photo",
+      "textureScaleMm": 600,
+      "surfaceMapping": {
+        "projection": "uv",
+        "faces": [
+          "front",
+          "top"
+        ],
+        "scaleMm": 600,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/boat-cabin.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/boat-cabin.jpg",
+        "illuminant": "mixed",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "normal",
+          "path": "textures/boat-cabin-wood-normal.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 600,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/boat-cabin.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/boat-cabin-wood-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 600,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/boat-cabin.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/boat-cabin.jpg"
+      ]
+    }
+  ],
+  "conditions": [
+    {
+      "id": "hull-light-oxidation",
+      "hostElementId": "hull",
+      "type": "oxidation",
+      "severity": "low",
+      "locationHint": "Port aft gelcoat surface",
+      "confidence": "medium",
+      "verification": "verified",
+      "source": "photo",
+      "materialSurface": "hull",
+      "photoSources": [
+        "photos/boat-detail.jpg"
+      ],
+      "surfacePlacement": {
+        "hostElementId": "hull",
+        "face": "left",
+        "u": 0.72,
+        "v": 0.48,
+        "widthMm": 260,
+        "heightMm": 90,
+        "rotationDeg": 0
+      },
+      "notes": "Light oxidation evidence proves condition capture without changing measured hull geometry."
+    }
+  ],
+  "conditionInspections": [
+    {
+      "id": "inspection-hull",
+      "zone": "hull",
+      "hostElementId": "hull",
+      "materialCategory": "gelcoat",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/boat-port.jpg",
+        "photos/boat-starboard.jpg"
+      ],
+      "conditionIds": [],
+      "confidence": "medium",
+      "notes": "Hull gelcoat inspected from verified side views."
+    },
+    {
+      "id": "inspection-deck",
+      "zone": "deck",
+      "hostElementId": "deck-surface",
+      "materialCategory": "fabric",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/boat-deck.jpg"
+      ],
+      "conditionIds": [],
+      "confidence": "medium",
+      "notes": "Deck surfaces inspected from verified deck reference."
+    },
+    {
+      "id": "inspection-fittings",
+      "zone": "fittings",
+      "hostElementId": "stainless-fittings",
+      "materialCategory": "metal",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/boat-starboard.jpg"
+      ],
+      "conditionIds": [],
+      "confidence": "medium",
+      "notes": "Metal fittings inspected from verified starboard reference."
+    },
+    {
+      "id": "inspection-upholstery-canvas",
+      "zone": "upholstery-canvas",
+      "hostElementId": "canvas-upholstery",
+      "materialCategory": "fabric",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/boat-deck.jpg"
+      ],
+      "conditionIds": [],
+      "confidence": "medium",
+      "notes": "Canvas and upholstery inspected from verified deck reference."
+    },
+    {
+      "id": "inspection-cabin",
+      "zone": "cabin",
+      "hostElementId": "cabin-interior",
+      "materialCategory": "wood",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/boat-cabin.jpg"
+      ],
+      "conditionIds": [],
+      "confidence": "medium",
+      "notes": "Cabin material surfaces inspected from verified cabin reference."
+    }
+  ],
+  "assumptions": [],
+  "outputTargets": [
+    "blend",
+    "glb",
+    "photoreal-render",
+    "material-condition-report"
+  ]
+}

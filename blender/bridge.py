@@ -7,6 +7,9 @@ from pathlib import Path
 import bpy
 from mathutils import Vector
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from digital_viewing import render_digital_viewing
+
 MM_TO_M = 0.001
 
 
@@ -1275,6 +1278,16 @@ def add_light():
     light.data.size = 5
 
 
+def resolve_under_output_root(payload, relative_path):
+    if Path(relative_path).is_absolute() or ".." in Path(relative_path).parts:
+        raise ValueError(f"Path must be relative and stay inside output root: {relative_path}")
+    output_root = Path(payload["outputRoot"]).resolve()
+    resolved = (output_root / relative_path).resolve()
+    if output_root != resolved and output_root not in resolved.parents:
+        raise ValueError(f"Path escapes output root: {relative_path}")
+    return resolved
+
+
 def main():
     args = sys.argv
     payload_path = Path(args[args.index("--") + 1])
@@ -1295,6 +1308,8 @@ def main():
             create_dimensioned_pdf(payload)
         elif operation == "export_template":
             export_template(payload)
+        elif operation == "digital_viewing_render":
+            render_digital_viewing(payload, output_path)
         else:
             create_measurement_project(payload)
     else:

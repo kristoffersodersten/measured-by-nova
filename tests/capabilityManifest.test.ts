@@ -13,8 +13,19 @@ describe("capability manifest", () => {
 
     expect(manifest.schemaVersion).toBe(1);
     expect(manifest.supportedTemplates).toContain("gothenburg-permit");
+    expect(manifest.supportedTemplates).toContain("measured-digital-viewing");
     expect(manifest.allowedStrategies.viewGeneration).toEqual(["blender-orthographic-camera"]);
+    expect(manifest.allowedStrategies.digitalViewingRender).toEqual([
+      "locked-blender-source",
+      "pbr-materials",
+      "texture-map-application",
+      "condition-overlays",
+      "blender-camera",
+      "blender-lighting",
+      "render-manifest"
+    ]);
     expect(manifest.prohibitedStrategies).toContain("export-stage-geometry-reconstruction");
+    expect(manifest.prohibitedStrategies).toContain("photoreal-geometry-inference");
   });
 
   it("rejects unsupported templates", () => {
@@ -63,5 +74,22 @@ describe("capability manifest", () => {
       message: "Requested export strategy is explicitly prohibited by this capability manifest.",
       strategy: "export-stage-geometry-reconstruction"
     });
+  });
+
+  it("allows the measured digital viewing render strategy set", () => {
+    const result = evaluateCapabilityExecution(DefaultCapabilityManifest, {
+      template: "measured-digital-viewing",
+      strategies: [
+        "locked-blender-source",
+        "pbr-materials",
+        "texture-map-application",
+        "condition-overlays",
+        "blender-camera",
+        "blender-lighting",
+        "render-manifest"
+      ]
+    });
+
+    expect(result).toEqual({ ok: true, blocking: [], warnings: [] });
   });
 });

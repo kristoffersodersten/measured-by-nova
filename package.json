@@ -4,13 +4,13 @@
   "description": "Measured by Nova: local spatial reconstruction framework for physically accurate Blender models from measurements, structured photos, and materials.",
   "type": "module",
   "license": "MIT",
-  "homepage": "https://github.com/kristoffersodersten/nova-measured#readme",
+  "homepage": "https://github.com/kristoffersodersten/measured-by-nova#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kristoffersodersten/nova-measured.git"
+    "url": "git+https://github.com/kristoffersodersten/measured-by-nova.git"
   },
   "bugs": {
-    "url": "https://github.com/kristoffersodersten/nova-measured/issues"
+    "url": "https://github.com/kristoffersodersten/measured-by-nova/issues"
   },
   "keywords": [
     "mcp",
@@ -38,7 +38,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && mkdir -p dist/blender && cp blender/bridge.py dist/blender/bridge.py",
+    "build": "tsc -p tsconfig.json && mkdir -p dist/blender && cp blender/*.py dist/blender/",
     "dev": "tsx src/server.ts",
     "lint": "eslint . --ext .ts",
     "test": "vitest run",

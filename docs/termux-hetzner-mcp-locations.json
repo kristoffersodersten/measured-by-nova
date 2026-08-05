@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "profile": "hetzner-mcp-termux",
+  "purpose": "Termux access map for remote MCP servers hosted on Hetzner because local frontend hardware is intentionally kept lightweight.",
+  "computeDistribution": {
+    "reason": "Frontend hardware is intentionally weak/lightweight, so heavy MCP runtime, Docker, indexing, rendering support, tests, and long-running services belong on Hetzner.",
+    "frontendHardwareClass": "weak-lightweight",
+    "frontendRole": "control-surface-only",
+    "runtimeAuthority": "hetzner",
+    "termuxRole": "mobile SSH control surface",
+    "macRole": "GUI/control/signing/light smoke checks",
+    "forbidden": [
+      "Do not run heavy MCP services on Termux.",
+      "Do not expose MCP ports publicly.",
+      "Do not treat Mac or Termux as authoritative runtime hosts for heavy services."
+    ]
+  },
+  "verificationStatus": {
+    "status": "verified-current-session",
+    "lastAttempt": "2026-07-30T14:26:29+02:00",
+    "result": "ssh_ok; ai-stack_present; agy-termux-mcp.system_service_active; claude-backend-mcp.system_service_active; mcp-gateway.system_service_active; ollama.system_service_active",
+    "note": "Verified from local Codex session via SSH host alias ubuntu. Re-run the verifyCommands from Termux before treating Termux key forwarding as proven."
+  },
+  "ssh": {
+    "hostAlias": "ubuntu",
+    "hostName": "100.114.242.88",
+    "user": "krille",
+    "port": 22,
+    "termuxIdentityFile": "~/.ssh/id_ed25519_hetzner",
+    "macosIdentityFile": "~/.ssh/id_ed25519_hetzner",
+    "recommendedTermuxCommand": "ssh -i ~/.ssh/id_ed25519_hetzner krille@100.114.242.88"
+  },
+  "remote": {
+    "home": "/home/krille",
+    "primaryWorkspace": "/home/krille/ai-stack",
+    "hermesConfigDir": "/home/krille/.hermes",
+    "continueConfig": "/home/krille/.continue/config.yaml"
+  },
+  "mcp": {
+    "termuxDockerMcpGateway": {
+      "service": "agy-termux-mcp.service",
+      "host": "127.0.0.1",
+      "port": 17656,
+      "baseUrl": "http://127.0.0.1:17656",
+      "transport": "sse",
+      "profile": "claude-backend-tools",
+      "config": {
+        "serviceFile": "/etc/systemd/system/agy-termux-mcp.service",
+        "environmentFile": "/home/krille/.config/claude-gateway/agy-mcp-gateway.env",
+        "dockerMcpBinary": "/home/krille/.docker/cli-plugins/docker-mcp",
+        "allowedBindPaths": [
+          "/home/krille/novaforge/vector-schedulers"
+        ]
+      },
+      "protocol": "SSE MCP over SSH port-forward"
+    },
+    "claudeBackendDockerMcpGateway": {
+      "service": "claude-backend-mcp.service",
+      "host": "127.0.0.1",
+      "port": 17655,
+      "baseUrl": "http://127.0.0.1:17655",
+      "transport": "streaming",
+      "profile": "claude-backend-tools",
+      "config": {
+        "serviceFile": "/etc/systemd/system/claude-backend-mcp.service",
+        "environmentFile": "/home/krille/.config/claude-gateway/mcp-gateway.env",
+        "dockerMcpBinary": "/home/krille/.docker/cli-plugins/docker-mcp",
+        "allowedBindPaths": [
+          "/home/krille/novaforge/vector-schedulers"
+        ]
+      },
+      "protocol": "initialize -> notifications/initialized -> tools/list -> tools/call"
+    },
+    "generalDockerMcpGateway": {
+      "service": "mcp-gateway.service",
+      "host": "127.0.0.1",
+      "port": 8080,
+      "baseUrl": "http://127.0.0.1:8080",
+      "transport": "streaming",
+      "profile": "krilles_profile",
+      "config": {
+        "serviceFile": "/etc/systemd/system/mcp-gateway.service",
+        "environmentFile": "/home/krille/.config/claude-gateway/mcp-gateway.env",
+        "allowedBindPaths": [
+          "/home/krille"
+        ],
+        "writableBindPaths": [
+          "/home/krille"
+        ]
+      },
+      "protocol": "initialize -> notifications/initialized -> tools/list -> tools/call"
+    },
+    "knownWorkspaceHints": [
+      "/home/krille/ai-stack",
+      "/home/krille/.hermes",
+      "/home/krille/.continue/config.yaml",
+      "/home/krille/.config/Code/User/mcp.json",
+      "/home/krille/.cline/data/settings/cline_mcp_settings.json",
+      "/home/krille/.copilot/mcp-config.json",
+      "/home/krille/.docker/mcp/config.yaml",
+      "/home/krille/.docker/mcp/profiles/krilles_profile.yaml"
+    ]
+  },
+  "termuxPortForwarding": {
+    "termuxMcpGateway": {
+      "command": "ssh -N -L 17656:127.0.0.1:17656 -i ~/.ssh/id_ed25519_hetzner krille@100.114.242.88",
+      "localUrlAfterForward": "http://127.0.0.1:17656",
+      "recommended": true
+    },
+    "claudeBackendMcpGateway": {
+      "command": "ssh -N -L 17655:127.0.0.1:17655 -i ~/.ssh/id_ed25519_hetzner krille@100.114.242.88",
+      "localUrlAfterForward": "http://127.0.0.1:17655",
+      "recommended": false
+    },
+    "optionalWebUi": {
+      "command": "ssh -N -L 8080:127.0.0.1:8080 -i ~/.ssh/id_ed25519_hetzner krille@100.114.242.88",
+      "localUrlAfterForward": "http://127.0.0.1:8080"
+    }
+  },
+  "verifyCommands": [
+    "ssh -i ~/.ssh/id_ed25519_hetzner krille@100.114.242.88 'hostname; whoami; pwd'",
+    "ssh -i ~/.ssh/id_ed25519_hetzner krille@100.114.242.88 'test -d /home/krille/ai-stack && echo ai-stack:ok || echo ai-stack:missing'",
+    "ssh -i ~/.ssh/id_ed25519_hetzner krille@100.114.242.88 'systemctl status agy-termux-mcp.service --no-pager'",
+    "ssh -i ~/.ssh/id_ed25519_hetzner krille@100.114.242.88 'systemctl status claude-backend-mcp.service --no-pager'",
+    "ssh -i ~/.ssh/id_ed25519_hetzner krille@100.114.242.88 'ss -ltnp | grep -E \"17656|17655|8080|11434\"'",
+    "ssh -N -L 17656:127.0.0.1:17656 -i ~/.ssh/id_ed25519_hetzner krille@100.114.242.88"
+  ],
+  "authorityRules": [
+    "Hetzner is the runtime for heavy MCP, Docker, indexing, tests, and long-running services.",
+    "Mac and Termux are control surfaces only.",
+    "Do not treat this file as live proof until verifyCommands pass.",
+    "Do not expose MCP ports publicly; use SSH forwarding."
+  ]
+}

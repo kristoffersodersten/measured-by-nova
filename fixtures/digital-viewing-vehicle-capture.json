@@ -1,0 +1,715 @@
+{
+  "schemaVersion": 1,
+  "captureId": "vehicle-demo-capture",
+  "projectId": "vehicle-demo",
+  "assetType": "vehicle",
+  "unit": "mm",
+  "requiredSectors": [
+    "front",
+    "rear",
+    "left",
+    "right",
+    "interior",
+    "detail"
+  ],
+  "modelElements": [
+    {
+      "id": "body",
+      "kind": "body",
+      "renderable": true,
+      "confidence": "high",
+      "source": "measured_geometry"
+    },
+    {
+      "id": "wheel-axles",
+      "kind": "wheelbase",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "measured_geometry"
+    },
+    {
+      "id": "front-seat",
+      "kind": "seat",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    },
+    {
+      "id": "front-left-door",
+      "kind": "surface",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    },
+    {
+      "id": "glazing",
+      "kind": "surface",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    },
+    {
+      "id": "tire-set",
+      "kind": "surface",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    }
+  ],
+  "measurements": [
+    {
+      "id": "overall-length",
+      "label": "Overall length",
+      "value": 4820,
+      "unit": "mm",
+      "confidence": "high",
+      "verified": true,
+      "source": "manual_measurement",
+      "placement": {
+        "hostElementId": "body",
+        "axis": "x",
+        "from": "front bumper outer plane",
+        "to": "rear bumper outer plane",
+        "referenceFrame": "asset-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 5
+    },
+    {
+      "id": "overall-width",
+      "label": "Overall width",
+      "value": 1890,
+      "unit": "mm",
+      "confidence": "high",
+      "verified": true,
+      "source": "manual_measurement",
+      "placement": {
+        "hostElementId": "body",
+        "axis": "y",
+        "from": "left outer body plane",
+        "to": "right outer body plane",
+        "referenceFrame": "asset-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 5
+    },
+    {
+      "id": "overall-height",
+      "label": "Overall height",
+      "value": 1450,
+      "unit": "mm",
+      "confidence": "high",
+      "verified": true,
+      "source": "manual_measurement",
+      "placement": {
+        "hostElementId": "body",
+        "axis": "z",
+        "from": "ground contact plane",
+        "to": "roof highest point",
+        "referenceFrame": "asset-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 5
+    },
+    {
+      "id": "wheelbase",
+      "label": "Wheelbase",
+      "value": 2870,
+      "unit": "mm",
+      "confidence": "medium",
+      "verified": true,
+      "source": "manual_measurement",
+      "placement": {
+        "hostElementId": "wheel-axles",
+        "axis": "x",
+        "from": "front axle centerline",
+        "to": "rear axle centerline",
+        "referenceFrame": "asset-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 5
+    }
+  ],
+  "photos": [
+    {
+      "path": "photos/front.jpg",
+      "sector": "front",
+      "role": "geometry_alignment",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": 0,
+        "pitchDeg": 0,
+        "focalLength35mmEquivalent": 50,
+        "cameraDistanceMm": 6500,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/rear.jpg",
+      "sector": "rear",
+      "role": "geometry_alignment",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": 180,
+        "pitchDeg": 0,
+        "focalLength35mmEquivalent": 50,
+        "cameraDistanceMm": 6500,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/left.jpg",
+      "sector": "left",
+      "role": "material",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": -90,
+        "pitchDeg": 0,
+        "focalLength35mmEquivalent": 50,
+        "cameraDistanceMm": 7000,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/right.jpg",
+      "sector": "right",
+      "role": "material",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": 90,
+        "pitchDeg": 0,
+        "focalLength35mmEquivalent": 50,
+        "cameraDistanceMm": 7000,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/interior.jpg",
+      "sector": "interior",
+      "role": "material",
+      "verified": true,
+      "anchorsVisible": false,
+      "captureMetadata": {
+        "angleType": "interior",
+        "cameraMode": "perspective-reference",
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-sector",
+        "occluded": false,
+        "lightingReference": "mixed-measured",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/detail-scratch.jpg",
+      "sector": "detail",
+      "role": "condition",
+      "verified": true,
+      "anchorsVisible": false,
+      "captureMetadata": {
+        "angleType": "detail",
+        "cameraMode": "macro-detail",
+        "pitchGuidance": "surface-normal",
+        "lensGuidance": "macro-detail",
+        "coverage": "condition-detail",
+        "occluded": false,
+        "cameraDistanceMm": 450,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 2048,
+      "pixelHeight": 2048
+    }
+  ],
+  "materials": [
+    {
+      "materialId": "body-paint",
+      "hostElementId": "body",
+      "presetId": "automotive-white-paint",
+      "materialSurfaces": [
+        "body-panels",
+        "bumpers"
+      ],
+      "category": "paint",
+      "baseColor": "#f7f7f2",
+      "roughness": 0.38,
+      "metallic": 0,
+      "specular": 0.55,
+      "normalSource": "photo",
+      "textureScaleMm": 1200,
+      "surfaceMapping": {
+        "projection": "box",
+        "faces": [
+          "front",
+          "rear",
+          "left",
+          "right",
+          "top"
+        ],
+        "scaleMm": 1200,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/left.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/left.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "baseColor",
+          "path": "textures/body-paint-basecolor.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "sRGB",
+          "scaleMm": 1200,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/left.jpg"
+        },
+        {
+          "type": "normal",
+          "path": "textures/body-paint-normal.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 1200,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/left.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/body-paint-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 1200,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/right.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/left.jpg",
+        "photos/right.jpg"
+      ],
+      "notes": "White paint observed from verified side photos."
+    },
+    {
+      "materialId": "interior-leather",
+      "hostElementId": "front-seat",
+      "presetId": "black-leather",
+      "materialSurfaces": [
+        "seats",
+        "steering-wheel"
+      ],
+      "category": "leather",
+      "baseColor": "#1c1c1c",
+      "roughness": 0.62,
+      "metallic": 0,
+      "specular": 0.35,
+      "normalSource": "photo",
+      "textureScaleMm": 450,
+      "surfaceMapping": {
+        "projection": "uv",
+        "faces": [
+          "front",
+          "top"
+        ],
+        "scaleMm": 450,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/interior.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/interior.jpg",
+        "illuminant": "studio",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "normal",
+          "path": "textures/interior-leather-normal.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 450,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/interior.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/interior-leather-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 450,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/interior.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/interior.jpg"
+      ]
+    },
+    {
+      "materialId": "window-glass",
+      "hostElementId": "glazing",
+      "presetId": "clear-glass",
+      "materialSurfaces": [
+        "windshield",
+        "side-windows",
+        "rear-window"
+      ],
+      "category": "glass",
+      "baseColor": "#dfefff",
+      "roughness": 0.04,
+      "metallic": 0,
+      "specular": 0.9,
+      "transmission": 0.72,
+      "normalSource": "none",
+      "textureScaleMm": 1000,
+      "surfaceMapping": {
+        "projection": "box",
+        "faces": [
+          "front",
+          "rear",
+          "left",
+          "right"
+        ],
+        "scaleMm": 1000,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/front.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/front.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "alpha",
+          "path": "textures/window-glass-alpha.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 1000,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/front.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/window-glass-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 1000,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/right.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/front.jpg",
+        "photos/right.jpg"
+      ],
+      "notes": "Vehicle glass controls reflectivity and transparency in buyer-facing renders."
+    },
+    {
+      "materialId": "tire-rubber",
+      "hostElementId": "tire-set",
+      "presetId": "dark-rubber",
+      "materialSurfaces": [
+        "tires",
+        "window-seals"
+      ],
+      "category": "rubber",
+      "baseColor": "#151515",
+      "roughness": 0.78,
+      "metallic": 0,
+      "specular": 0.22,
+      "normalSource": "photo",
+      "textureScaleMm": 280,
+      "surfaceMapping": {
+        "projection": "uv",
+        "faces": [
+          "left",
+          "right"
+        ],
+        "scaleMm": 280,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/left.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/left.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "normal",
+          "path": "textures/tire-rubber-normal.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 280,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/left.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/tire-rubber-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 280,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/right.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/left.jpg",
+        "photos/right.jpg"
+      ],
+      "notes": "Tire rubber must carry tread/roughness evidence for sales-grade visual quality."
+    },
+    {
+      "materialId": "wheel-metal",
+      "hostElementId": "wheel-axles",
+      "presetId": "brushed-metal",
+      "materialSurfaces": [
+        "wheels",
+        "trim",
+        "badges"
+      ],
+      "category": "metal",
+      "baseColor": "#b8b8b3",
+      "roughness": 0.42,
+      "metallic": 1,
+      "specular": 0.55,
+      "normalSource": "photo",
+      "textureScaleMm": 300,
+      "surfaceMapping": {
+        "projection": "uv",
+        "faces": [
+          "left",
+          "right"
+        ],
+        "scaleMm": 300,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/right.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/right.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "metallic",
+          "path": "textures/wheel-metal-metallic.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 300,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/right.jpg"
+        },
+        {
+          "type": "normal",
+          "path": "textures/wheel-metal-normal.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 300,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/left.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/wheel-metal-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 300,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/right.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/left.jpg",
+        "photos/right.jpg"
+      ],
+      "notes": "Wheel metal is required so reflections and finish do not collapse into generic grey geometry."
+    }
+  ],
+  "conditions": [
+    {
+      "id": "front-left-scratch",
+      "hostElementId": "front-left-door",
+      "type": "scratch",
+      "severity": "medium",
+      "locationHint": "Lower front-left door panel",
+      "confidence": "medium",
+      "verification": "verified",
+      "source": "photo",
+      "materialSurface": "body-panels",
+      "photoSources": [
+        "photos/detail-scratch.jpg"
+      ],
+      "surfacePlacement": {
+        "hostElementId": "body",
+        "face": "front",
+        "u": 0.32,
+        "v": 0.42,
+        "widthMm": 420,
+        "heightMm": 24,
+        "rotationDeg": -8
+      },
+      "notes": "Visible scratch must remain visible in photorealistic preview."
+    }
+  ],
+  "conditionInspections": [
+    {
+      "id": "inspection-body",
+      "zone": "body",
+      "hostElementId": "body",
+      "materialCategory": "paint",
+      "status": "defect-found",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/detail-scratch.jpg"
+      ],
+      "conditionIds": [
+        "front-left-scratch"
+      ],
+      "confidence": "medium",
+      "notes": "Body paint inspected; visible scratch is captured as condition evidence."
+    },
+    {
+      "id": "inspection-glass",
+      "zone": "glass",
+      "hostElementId": "glazing",
+      "materialCategory": "glass",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/front.jpg",
+        "photos/right.jpg"
+      ],
+      "confidence": "medium",
+      "notes": "Glass inspected from verified exterior photos."
+    },
+    {
+      "id": "inspection-wheels-tires",
+      "zone": "wheels-tires",
+      "hostElementId": "tire-set",
+      "materialCategory": "rubber",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/left.jpg",
+        "photos/right.jpg"
+      ],
+      "confidence": "medium",
+      "notes": "Wheels and tires inspected from side references."
+    },
+    {
+      "id": "inspection-interior",
+      "zone": "interior",
+      "hostElementId": "front-seat",
+      "materialCategory": "leather",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/interior.jpg"
+      ],
+      "confidence": "medium",
+      "notes": "Interior visible seating surfaces inspected from interior reference."
+    }
+  ],
+  "assumptions": [],
+  "outputTargets": [
+    "blend",
+    "glb",
+    "photoreal-render",
+    "material-condition-report"
+  ]
+}

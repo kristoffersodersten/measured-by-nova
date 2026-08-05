@@ -1,10 +1,45 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { z } from "zod";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { BlenderConfig, BlenderToolResult } from "./contracts.js";
 import { runBlenderJob, safeOutputPath } from "./blenderRunner.js";
 import { DefaultCapabilityManifest, evaluateCapabilityExecution } from "./capabilityManifest.js";
 import { captureToFixture, RealCarportCaptureSchema } from "./captureToFixture.js";
+import {
+  buildDigitalViewingBlenderRenderJob,
+  buildDigitalViewingAssetBundleManifest,
+  buildDigitalViewingCaptureGuide,
+  buildDigitalViewingCaptureRepairSummary,
+  buildDigitalViewingDeliveryPackageManifest,
+  buildDigitalViewingMaterialAuthoringPlan,
+  buildDigitalViewingMaterialConditionReport,
+  EvaluateDigitalViewingDeliveryProfileInputSchema,
+  evaluateDigitalViewingCapturePreset,
+  evaluateDigitalViewingDeliveryProfileReadiness,
+  evaluateDigitalViewingDeliveryReadiness,
+  GenerateDigitalViewingAssetBundleManifestInputSchema,
+  GenerateDigitalViewingDeliveryPackageInputSchema,
+  GenerateDigitalViewingMaterialAuthoringPlanInputSchema,
+  GenerateDigitalViewingMaterialReportInputSchema,
+  GetDigitalViewingCaptureGuideInputSchema,
+  GetDigitalViewingDeliveryProfileInputSchema,
+  getDigitalViewingCapturePreset,
+  getDigitalViewingDeliveryProfile,
+  GetDigitalViewingCapturePresetInputSchema,
+  listDigitalViewingCapturePresets,
+  listDigitalViewingDeliveryProfiles,
+  ListDigitalViewingDeliveryProfilesInputSchema,
+  ListDigitalViewingCapturePresetsInputSchema,
+  RenderDigitalViewingPreviewInputSchema,
+  serializeDigitalViewingAssetBundleManifest,
+  serializeDigitalViewingDeliveryPackageManifest,
+  serializeDigitalViewingMaterialConditionReport,
+  serializeDigitalViewingMaterialAuthoringPlan,
+  validateDigitalViewingCapture,
+  ValidateDigitalViewingCapturePresetInputSchema
+} from "./digitalViewingContracts.js";
 import { materializeProfiles } from "./profileGenerator.js";
 import { appendRequestLog, fail, ok, readProject, requestId, writeProject } from "./projectStore.js";
 import {
@@ -32,6 +67,7 @@ import {
 } from "./measurementContracts.js";
 
 type MachineReason = {
+  id?: string;
   code: string;
   message: string;
 };
@@ -271,12 +307,370 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     return ok(req, { blender: result, template: payload.template, outputDir: next.artifacts[artifactKey] }, exportTemplateWarnings(payload.template));
   });
 
+  register(server, "list_digital_viewing_capture_presets", "List deterministic domain capture presets that define required photos, measurements, materials, and condition evidence before rendering.", ListDigitalViewingCapturePresetsInputSchema, (input) => {
+    const req = requestId();
+    ListDigitalViewingCapturePresetsInputSchema.parse(input);
+    return ok(req, { presets: listDigitalViewingCapturePresets() });
+  });
+
+  register(server, "get_digital_viewing_capture_preset", "Get the deterministic capture requirements for a specific asset type and delivery tier.", GetDigitalViewingCapturePresetInputSchema, (input) => {
+    const req = requestId();
+    const payload = GetDigitalViewingCapturePresetInputSchema.parse(input);
+    try {
+      const preset = getDigitalViewingCapturePreset(payload.assetType, payload.deliveryTier);
+      return ok(req, { preset });
+    } catch (error) {
+      return fail(req, "capture_preset_missing", error instanceof Error ? error.message : String(error));
+    }
+  });
+
+  register(server, "get_digital_viewing_capture_guide", "Get deterministic shot lists and machine-readable measurement, material, and inspection checklists for capture operators.", GetDigitalViewingCaptureGuideInputSchema, (input) => {
+    const req = requestId();
+    const payload = GetDigitalViewingCaptureGuideInputSchema.parse(input);
+    try {
+      const guide = buildDigitalViewingCaptureGuide(payload.assetType, payload.deliveryTier);
+      return ok(req, { guide }, [
+        "Capture guide is not geometry authority.",
+        "Measurements remain the primary source of truth; photos are material, condition, context, and validation evidence."
+      ]);
+    } catch (error) {
+      return fail(req, "capture_preset_missing", error instanceof Error ? error.message : String(error));
+    }
+  });
+
+  register(server, "validate_digital_viewing_capture_preset", "Validate a digital-viewing capture against its domain preset before Blender rendering or model generation.", ValidateDigitalViewingCapturePresetInputSchema, (input) => {
+    const req = requestId();
+    const payload = ValidateDigitalViewingCapturePresetInputSchema.parse(input);
+    let preset;
+    try {
+      preset = getDigitalViewingCapturePreset(payload.capture.assetType, payload.deliveryTier);
+    } catch (error) {
+      return fail(req, "capture_preset_missing", error instanceof Error ? error.message : String(error));
+    }
+    const guide = buildDigitalViewingCaptureGuide(payload.capture.assetType, payload.deliveryTier);
+    const captureValidation = validateDigitalViewingCapture(payload.capture);
+    const deliveryReadiness = evaluateDigitalViewingDeliveryReadiness(payload.capture, payload.deliveryTier);
+    const presetReadiness = evaluateDigitalViewingCapturePreset(payload.capture, preset);
+    const blocking = [...captureValidation.blocking, ...deliveryReadiness.blocking, ...presetReadiness.blocking];
+    const warnings = [
+      ...captureValidation.warnings.map((reason) => `${reason.code}: ${reason.message}`),
+      ...deliveryReadiness.warnings.map((reason) => `${reason.code}: ${reason.message}`),
+      ...presetReadiness.warnings.map((reason) => `${reason.code}: ${reason.message}`)
+    ];
+    if (blocking.length > 0) {
+      const repairSummary = buildDigitalViewingCaptureRepairSummary(blocking);
+      return fail(
+        req,
+        "digital_viewing_capture_not_ready",
+        "Capture does not satisfy the selected domain preset and delivery tier.",
+        warnings,
+        { preset, guide, repairSummary, captureValidation, deliveryReadiness, presetReadiness, blocking }
+      );
+    }
+    return ok(req, { preset, guide, repairSummary: buildDigitalViewingCaptureRepairSummary([]), captureValidation, deliveryReadiness, presetReadiness }, warnings);
+  });
+
+  register(server, "list_digital_viewing_delivery_profiles", "List deterministic customer-surface delivery profiles and their required package targets.", ListDigitalViewingDeliveryProfilesInputSchema, (input) => {
+    const req = requestId();
+    ListDigitalViewingDeliveryProfilesInputSchema.parse(input);
+    return ok(req, { profiles: listDigitalViewingDeliveryProfiles() }, [
+      "Delivery profiles are not geometry authority.",
+      "Profiles define customer-facing package targets only; they do not render, infer, or mutate geometry."
+    ]);
+  });
+
+  register(server, "get_digital_viewing_delivery_profile", "Get one deterministic customer-surface delivery profile and its required package targets.", GetDigitalViewingDeliveryProfileInputSchema, (input) => {
+    const req = requestId();
+    const payload = GetDigitalViewingDeliveryProfileInputSchema.parse(input);
+    try {
+      return ok(req, { profile: getDigitalViewingDeliveryProfile(payload.customerSurface) }, [
+        "Delivery profile is not geometry authority.",
+        "Profile defines customer-facing package targets only; it does not render, infer, or mutate geometry."
+      ]);
+    } catch (error) {
+      return fail(req, "delivery_profile_missing", error instanceof Error ? error.message : String(error));
+    }
+  });
+
+  register(server, "evaluate_digital_viewing_delivery_profile", "Evaluate whether a capture declares the required output targets for a customer-facing delivery profile.", EvaluateDigitalViewingDeliveryProfileInputSchema, (input) => {
+    const req = requestId();
+    const payload = EvaluateDigitalViewingDeliveryProfileInputSchema.parse(input);
+    const readiness = evaluateDigitalViewingDeliveryProfileReadiness(payload.capture, payload.customerSurface);
+    if (!readiness.ok) {
+      return fail(
+        req,
+        "digital_viewing_delivery_profile_not_ready",
+        "Capture outputTargets do not satisfy the selected customer-surface delivery profile.",
+        readiness.warnings.map((reason) => `${reason.code}: ${reason.message}`),
+        { readiness, blocking: readiness.blocking }
+      );
+    }
+    return ok(req, { readiness }, readiness.warnings.map((reason) => `${reason.code}: ${reason.message}`));
+  });
+
+  register(server, "render_digital_viewing_preview", "Render a photorealistic preview from a locked Blender source using a deterministic digital-viewing manifest.", RenderDigitalViewingPreviewInputSchema, async (input) => {
+    const req = requestId();
+    const payload = RenderDigitalViewingPreviewInputSchema.parse(input);
+    let preset;
+    try {
+      preset = getDigitalViewingCapturePreset(payload.capture.assetType, payload.renderPreset.deliveryTier);
+    } catch (error) {
+      return fail(req, "capture_preset_missing", error instanceof Error ? error.message : String(error));
+    }
+    const presetReadiness = evaluateDigitalViewingCapturePreset(payload.capture, preset);
+    if (!presetReadiness.ok) {
+      return fail(
+        req,
+        "digital_viewing_capture_not_ready",
+        "Capture must satisfy the selected domain preset before rendering.",
+        presetReadiness.warnings.map((reason) => `${reason.code}: ${reason.message}`),
+        { preset, presetReadiness }
+      );
+    }
+    const job = buildDigitalViewingBlenderRenderJob(payload.capture, payload.renderPreset, payload.sourceBlendPath, DefaultCapabilityManifest, payload.assetBundleManifest);
+    const outputBlend = payload.outputBlendPath ?? payload.renderPreset.outputPath.replace(/\.[^.]+$/, ".blend");
+    const result = await runBlenderJob(config, job, outputBlend);
+    await appendRequestLog(config, payload.capture.projectId, req, "render_digital_viewing_preview", {
+      captureId: payload.capture.captureId,
+      projectId: payload.capture.projectId,
+      sourceBlendPath: payload.sourceBlendPath,
+      renderPreset: payload.renderPreset,
+      outputBlendPath: outputBlend,
+      renderManifestHash: job.renderManifest.hashes.manifestHash
+    });
+    return ok(req, {
+      blender: result,
+      renderManifest: job.renderManifest,
+      artifacts: job.renderManifest.artifacts
+    }, [
+      "Photorealistic preview is not geometry authority.",
+      "Render used locked Blender geometry and did not reconstruct geometry in the export stage."
+    ]);
+  });
+
+  register(server, "generate_digital_viewing_material_authoring_plan", "Generate deterministic per-material PBR authoring requirements before Blender rendering without changing geometry.", GenerateDigitalViewingMaterialAuthoringPlanInputSchema, async (input) => {
+    const req = requestId();
+    const payload = GenerateDigitalViewingMaterialAuthoringPlanInputSchema.parse(input);
+    const plan = buildDigitalViewingMaterialAuthoringPlan(payload.capture, payload.deliveryTier);
+    const planPath = payload.outputPath ? safeOutputPath(config.outputDir, payload.outputPath) : undefined;
+    if (planPath) {
+      await mkdir(path.dirname(planPath), { recursive: true });
+      await writeFile(planPath, serializeDigitalViewingMaterialAuthoringPlan(plan), "utf8");
+      await appendRequestLog(config, payload.capture.projectId, req, "generate_digital_viewing_material_authoring_plan", {
+        captureId: payload.capture.captureId,
+        projectId: payload.capture.projectId,
+        deliveryTier: payload.deliveryTier,
+        outputPath: payload.outputPath,
+        planHash: plan.hashes.planHash
+      });
+    }
+    if (!plan.summary.ready) {
+      return fail(
+        req,
+        "digital_viewing_material_authoring_incomplete",
+        "Material authoring plan found missing PBR evidence required for the selected delivery tier.",
+        plan.materials.flatMap((material) => material.warnings.map((reason) => `${reason.code}: ${reason.message}`)),
+        { plan, planPath, blocking: plan.materials.flatMap((material) => material.blocking) }
+      );
+    }
+    return ok(req, { plan, planPath }, [
+      "Material authoring plan is not geometry authority.",
+      "Plan defines PBR evidence requirements only; it does not reconstruct or mutate geometry."
+    ]);
+  });
+
+  register(server, "generate_digital_viewing_material_report", "Generate a deterministic material and condition evidence report from capture data and optional Blender render execution metadata.", GenerateDigitalViewingMaterialReportInputSchema, async (input) => {
+    const req = requestId();
+    const payload = GenerateDigitalViewingMaterialReportInputSchema.parse(input);
+    const report = buildDigitalViewingMaterialConditionReport(payload.capture, payload.deliveryTier, payload.renderManifest);
+    const reportPath = payload.outputPath ? safeOutputPath(config.outputDir, payload.outputPath) : undefined;
+    if (reportPath) {
+      await mkdir(path.dirname(reportPath), { recursive: true });
+      await writeFile(reportPath, serializeDigitalViewingMaterialConditionReport(report), "utf8");
+      await appendRequestLog(config, payload.capture.projectId, req, "generate_digital_viewing_material_report", {
+        captureId: payload.capture.captureId,
+        projectId: payload.capture.projectId,
+        deliveryTier: payload.deliveryTier,
+        outputPath: payload.outputPath,
+        reportHash: report.hashes.reportHash
+      });
+    }
+    if (!report.readiness.ok) {
+      return fail(
+        req,
+        "digital_viewing_report_not_ready",
+        "Material and condition report can be generated, but the selected delivery tier is not ready.",
+        report.readiness.warnings.map((reason) => `${reason.code}: ${reason.message}`),
+        { report, reportPath, blocking: report.readiness.blocking }
+      );
+    }
+    return ok(req, { report, reportPath }, [
+      "Material and condition report is not geometry authority.",
+      "Report summarizes measured and photo-backed evidence only; it does not reconstruct geometry."
+    ]);
+  });
+
+  register(server, "generate_digital_viewing_delivery_package", "Generate a deterministic delivery-package manifest with photoreal quality checklist, render evidence, material authoring, and material-condition evidence without changing geometry.", GenerateDigitalViewingDeliveryPackageInputSchema, async (input) => {
+    const req = requestId();
+    const payload = GenerateDigitalViewingDeliveryPackageInputSchema.parse(input);
+    const deliveryPackage = buildDigitalViewingDeliveryPackageManifest(
+      payload.capture,
+      payload.renderManifest,
+      payload.deliveryTargets,
+      payload.customerSurface,
+      payload.assetBundleManifest,
+      payload.assetBundleManifestPath,
+      payload.deliveryArtifacts
+    );
+    const packagePath = payload.outputPath ? safeOutputPath(config.outputDir, payload.outputPath) : undefined;
+    if (packagePath) {
+      await mkdir(path.dirname(packagePath), { recursive: true });
+      await writeFile(packagePath, serializeDigitalViewingDeliveryPackageManifest(deliveryPackage), "utf8");
+      await appendRequestLog(config, payload.capture.projectId, req, "generate_digital_viewing_delivery_package", {
+        captureId: payload.capture.captureId,
+        projectId: payload.capture.projectId,
+        deliveryTier: payload.renderManifest.renderPreset.deliveryTier,
+        outputPath: payload.outputPath,
+        packageHash: deliveryPackage.hashes.packageHash
+      });
+    }
+    if (!deliveryPackage.qualityGates.ready) {
+      return fail(
+        req,
+        "digital_viewing_delivery_package_not_ready",
+        "Delivery package manifest found contract mismatches or blocking quality gates.",
+        deliveryPackage.qualityGates.warnings.map((reason) => `${reason.code}: ${reason.message}`),
+        { deliveryPackage, packagePath, blocking: deliveryPackage.qualityGates.blocking }
+      );
+    }
+    return ok(req, { deliveryPackage, packagePath }, [
+      "Delivery package manifest is not geometry authority.",
+      "Package indexes validated capture, material, render, and report artifacts only; it does not reconstruct or mutate geometry."
+    ]);
+  });
+
+  register(server, "generate_digital_viewing_asset_bundle_manifest", "Generate a deterministic pre-render asset-bundle readiness manifest without starting Blender or changing geometry.", GenerateDigitalViewingAssetBundleManifestInputSchema, async (input) => {
+    const req = requestId();
+    const payload = GenerateDigitalViewingAssetBundleManifestInputSchema.parse(input);
+    const scannedFiles = payload.scanOutputDir ? await listOutputDirFiles(config.outputDir) : [];
+    const scannedFilePaths = scannedFiles.map((file) => file.path);
+    const assetBundle = buildDigitalViewingAssetBundleManifest(payload.capture, payload.renderManifest, {
+      existingFiles: Array.from(new Set([...payload.existingFiles, ...scannedFilePaths])).sort((left, right) => left.localeCompare(right)),
+      assetFiles: scannedFiles
+    });
+    const assetBundlePath = payload.outputPath ? safeOutputPath(config.outputDir, payload.outputPath) : undefined;
+    if (assetBundlePath) {
+      await mkdir(path.dirname(assetBundlePath), { recursive: true });
+      await writeFile(assetBundlePath, serializeDigitalViewingAssetBundleManifest(assetBundle), "utf8");
+      await appendRequestLog(config, payload.capture.projectId, req, "generate_digital_viewing_asset_bundle_manifest", {
+        captureId: payload.capture.captureId,
+        projectId: payload.capture.projectId,
+        deliveryTier: payload.renderManifest.renderPreset.deliveryTier,
+        outputPath: payload.outputPath,
+        assetBundleHash: assetBundle.hashes.assetBundleHash
+      });
+    }
+    if (!assetBundle.qualityGates.ready) {
+      return fail(
+        req,
+        "digital_viewing_asset_bundle_not_ready",
+        "Asset bundle manifest found missing files required before premium Blender rendering.",
+        assetBundle.qualityGates.warnings.map((reason) => `${reason.code}: ${reason.message}`),
+        { assetBundle, assetBundlePath, blocking: assetBundle.qualityGates.blocking }
+      );
+    }
+    return ok(req, { assetBundle, assetBundlePath }, [
+      "Asset bundle manifest is not geometry authority.",
+      "Bundle checks declared evidence and texture files only; it does not start Blender, reconstruct geometry, or mutate geometry."
+    ]);
+  });
+
   register(server, "run_blender_python", "UNSAFE fallback only. Runs explicit user-approved Blender Python after opt-in, with restricted builtins/imports and audit logging.", UnsafeRunPythonSchema, async (input) => {
     const req = requestId();
     const payload = UnsafeRunPythonSchema.parse(input);
     const result = await runBlenderJob(config, { mode: "python", ...payload, requestId: req }, payload.outputFile ?? "python-output.blend");
     return ok(req, { blender: result }, ["Unsafe Python execution was explicitly allowed and audited."]);
   });
+}
+
+type ScannedAssetFile = {
+  path: string;
+  sizeBytes: number;
+  sha256: string;
+  width?: number;
+  height?: number;
+};
+
+async function listOutputDirFiles(outputDir: string): Promise<ScannedAssetFile[]> {
+  const root = path.resolve(outputDir);
+  const files: ScannedAssetFile[] = [];
+  await collectRelativeFiles(root, root, files);
+  return files.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+async function collectRelativeFiles(root: string, directory: string, files: ScannedAssetFile[]): Promise<void> {
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    const absolute = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      await collectRelativeFiles(root, absolute, files);
+      continue;
+    }
+    if (!entry.isFile()) {
+      continue;
+    }
+    const [metadata, contents] = await Promise.all([stat(absolute), readFile(absolute)]);
+    const dimensions = imageDimensions(contents);
+    files.push({
+      path: path.relative(root, absolute).split(path.sep).join("/"),
+      sizeBytes: metadata.size,
+      sha256: createHash("sha256").update(contents).digest("hex"),
+      ...dimensions
+    });
+  }
+}
+
+function imageDimensions(contents: Buffer): { width: number; height: number } | undefined {
+  if (contents.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) && contents.length >= 24) {
+    return {
+      width: contents.readUInt32BE(16),
+      height: contents.readUInt32BE(20)
+    };
+  }
+  if (contents[0] === 0xff && contents[1] === 0xd8) {
+    let cursor = 2;
+    while (cursor + 9 < contents.length) {
+      if (contents[cursor] !== 0xff) {
+        cursor += 1;
+        continue;
+      }
+      const marker = contents[cursor + 1];
+      cursor += 2;
+      if (marker === 0xd8 || marker === 0xd9) {
+        continue;
+      }
+      if (cursor + 2 > contents.length) {
+        break;
+      }
+      const segmentLength = contents.readUInt16BE(cursor);
+      if (segmentLength < 2 || cursor + segmentLength > contents.length) {
+        break;
+      }
+      if ([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf].includes(marker)) {
+        return {
+          height: contents.readUInt16BE(cursor + 3),
+          width: contents.readUInt16BE(cursor + 5)
+        };
+      }
+      cursor += segmentLength;
+    }
+  }
+  return undefined;
 }
 
 function exportTemplateWarnings(template: string): string[] {
@@ -336,7 +730,7 @@ function formatReasons(gate: QualityGateResult): string[] {
   return [...gate.blocking, ...gate.warnings].map((reason) => `${reason.code}: ${reason.message}`);
 }
 
-function register<T extends z.ZodObject<z.ZodRawShape>>(server: McpServer, name: string, description: string, schema: T, handler: (input: z.infer<T>) => Promise<unknown>): void {
+function register<T extends z.ZodObject<z.ZodRawShape>>(server: McpServer, name: string, description: string, schema: T, handler: (input: z.infer<T>) => Promise<unknown> | object): void {
   server.tool(name, description, schema.shape, async (input) => {
     try {
       const body = await handler(input);

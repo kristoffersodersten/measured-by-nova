@@ -12,19 +12,32 @@ export const CapabilityManifestSchema = z.object({
     "swedish-municipality",
     "gothenburg-permit",
     "measured-visualization",
-    "cad-simulated"
+    "cad-simulated",
+    "measured-digital-viewing"
   ])).min(1),
   allowedStrategies: z.object({
     geometryGeneration: z.array(z.enum(["parametric-profile", "structured-elements"])).min(1),
     viewGeneration: z.array(z.enum(["blender-orthographic-camera"])).min(1),
     lineRendering: z.array(z.enum(["freestyle", "line-art", "none"])).min(1),
-    exportComposition: z.array(z.enum(["manifest", "pdf-layout", "svg-layout", "png-render"])).min(1)
+    exportComposition: z.array(z.enum(["manifest", "pdf-layout", "svg-layout", "png-render"])).min(1),
+    digitalViewingRender: z.array(z.enum([
+      "locked-blender-source",
+      "pbr-materials",
+      "texture-map-application",
+      "condition-overlays",
+      "blender-camera",
+      "blender-lighting",
+      "render-manifest"
+    ])).min(1)
   }).strict(),
   prohibitedStrategies: z.array(z.enum([
     "export-stage-geometry-reconstruction",
     "photo-only-geometry-inference",
     "cad-claim",
-    "unlocked-permit-export"
+    "unlocked-permit-export",
+    "render-stage-geometry-reconstruction",
+    "photoreal-geometry-inference",
+    "unlocked-digital-viewing-render"
   ])).min(1)
 }).strict();
 export type CapabilityManifest = z.infer<typeof CapabilityManifestSchema>;
@@ -61,19 +74,32 @@ export const DefaultCapabilityManifest = CapabilityManifestSchema.parse({
     "swedish-municipality",
     "gothenburg-permit",
     "measured-visualization",
-    "cad-simulated"
+    "cad-simulated",
+    "measured-digital-viewing"
   ],
   allowedStrategies: {
     geometryGeneration: ["parametric-profile", "structured-elements"],
     viewGeneration: ["blender-orthographic-camera"],
     lineRendering: ["freestyle", "line-art", "none"],
-    exportComposition: ["manifest", "pdf-layout", "svg-layout", "png-render"]
+    exportComposition: ["manifest", "pdf-layout", "svg-layout", "png-render"],
+    digitalViewingRender: [
+      "locked-blender-source",
+      "pbr-materials",
+      "texture-map-application",
+      "condition-overlays",
+      "blender-camera",
+      "blender-lighting",
+      "render-manifest"
+    ]
   },
   prohibitedStrategies: [
     "export-stage-geometry-reconstruction",
     "photo-only-geometry-inference",
     "cad-claim",
-    "unlocked-permit-export"
+    "unlocked-permit-export",
+    "render-stage-geometry-reconstruction",
+    "photoreal-geometry-inference",
+    "unlocked-digital-viewing-render"
   ]
 });
 
@@ -96,7 +122,8 @@ export function evaluateCapabilityExecution(manifest: CapabilityManifest, reques
     ...manifest.allowedStrategies.geometryGeneration,
     ...manifest.allowedStrategies.viewGeneration,
     ...manifest.allowedStrategies.lineRendering,
-    ...manifest.allowedStrategies.exportComposition
+    ...manifest.allowedStrategies.exportComposition,
+    ...manifest.allowedStrategies.digitalViewingRender
   ]);
   const blocking: CapabilityDecision["blocking"] = [];
 

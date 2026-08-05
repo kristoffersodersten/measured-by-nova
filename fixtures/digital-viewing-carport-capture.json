@@ -1,0 +1,564 @@
+{
+  "schemaVersion": 1,
+  "captureId": "carport-demo-capture",
+  "projectId": "synthetic-carport",
+  "assetType": "exterior-structure",
+  "unit": "mm",
+  "requiredSectors": [
+    "north",
+    "south",
+    "east",
+    "west",
+    "detail"
+  ],
+  "modelElements": [
+    {
+      "id": "carport-frame",
+      "kind": "frame",
+      "renderable": true,
+      "confidence": "high",
+      "source": "measured_geometry"
+    },
+    {
+      "id": "roof",
+      "kind": "roof",
+      "renderable": true,
+      "confidence": "high",
+      "source": "measured_geometry"
+    },
+    {
+      "id": "street-stair-run",
+      "kind": "stair",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "measured_geometry"
+    },
+    {
+      "id": "outermost-southwest-post",
+      "kind": "frame",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "measured_geometry"
+    },
+    {
+      "id": "cladding-southwest",
+      "kind": "panel",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    },
+    {
+      "id": "foundation-wall",
+      "kind": "foundation",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    }
+  ],
+  "measurements": [
+    {
+      "id": "overall-width",
+      "label": "Carport width",
+      "value": 7676,
+      "unit": "mm",
+      "confidence": "high",
+      "verified": true,
+      "source": "drawing",
+      "placement": {
+        "hostElementId": "carport-frame",
+        "axis": "x",
+        "from": "west outer post plane",
+        "to": "east outer post plane",
+        "referenceFrame": "asset-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 1
+    },
+    {
+      "id": "overall-depth",
+      "label": "Carport depth",
+      "value": 6240,
+      "unit": "mm",
+      "confidence": "high",
+      "verified": true,
+      "source": "drawing",
+      "placement": {
+        "hostElementId": "carport-frame",
+        "axis": "y",
+        "from": "south/front outer plane",
+        "to": "north/rear outer plane",
+        "referenceFrame": "asset-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 1
+    },
+    {
+      "id": "overall-height",
+      "label": "High side roof height",
+      "value": 3455,
+      "unit": "mm",
+      "confidence": "high",
+      "verified": true,
+      "source": "drawing",
+      "placement": {
+        "hostElementId": "roof",
+        "axis": "z",
+        "from": "finished ground datum",
+        "to": "west high-side roof top",
+        "referenceFrame": "asset-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 1
+    },
+    {
+      "id": "low-side-height",
+      "label": "Low side roof height",
+      "value": 3174,
+      "unit": "mm",
+      "confidence": "high",
+      "verified": true,
+      "source": "drawing",
+      "placement": {
+        "hostElementId": "roof",
+        "axis": "z",
+        "from": "finished ground datum",
+        "to": "east low-side roof top",
+        "referenceFrame": "asset-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 1
+    },
+    {
+      "id": "roof-slope-percent",
+      "label": "Roof slope",
+      "value": 3.7,
+      "unit": "percent",
+      "confidence": "high",
+      "verified": true,
+      "source": "drawing",
+      "placement": {
+        "hostElementId": "roof",
+        "axis": "slope",
+        "from": "west high-side roof edge",
+        "to": "east low-side roof edge",
+        "referenceFrame": "asset-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 0.1
+    },
+    {
+      "id": "step-depth",
+      "label": "Step depth",
+      "value": 295,
+      "unit": "mm",
+      "confidence": "medium",
+      "verified": true,
+      "source": "manual_measurement",
+      "placement": {
+        "hostElementId": "street-stair-run",
+        "axis": "y",
+        "from": "step nosing",
+        "to": "next riser face",
+        "referenceFrame": "site-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 5
+    },
+    {
+      "id": "step-height",
+      "label": "Step height",
+      "value": 140,
+      "unit": "mm",
+      "confidence": "medium",
+      "verified": true,
+      "source": "manual_measurement",
+      "placement": {
+        "hostElementId": "street-stair-run",
+        "axis": "z",
+        "from": "lower tread surface",
+        "to": "upper tread surface",
+        "referenceFrame": "site-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 5
+    },
+    {
+      "id": "neighbor-boundary-distance",
+      "label": "Outermost southwest post to neighboring plot boundary",
+      "value": 7692,
+      "unit": "mm",
+      "confidence": "medium",
+      "verified": true,
+      "source": "manual_measurement",
+      "placement": {
+        "hostElementId": "outermost-southwest-post",
+        "axis": "distance",
+        "from": "outermost southwest post",
+        "to": "neighboring plot boundary",
+        "referenceFrame": "site-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 5
+    }
+  ],
+  "photos": [
+    {
+      "path": "photos/carport-north.jpg",
+      "sector": "north",
+      "role": "geometry_alignment",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": 180,
+        "pitchDeg": 0,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "focalLength35mmEquivalent": 45,
+        "cameraDistanceMm": 9000,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/carport-south.jpg",
+      "sector": "south",
+      "role": "geometry_alignment",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": 0,
+        "pitchDeg": 0,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "focalLength35mmEquivalent": 45,
+        "cameraDistanceMm": 9000,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/carport-east.jpg",
+      "sector": "east",
+      "role": "material",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": 90,
+        "pitchDeg": 0,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "focalLength35mmEquivalent": 50,
+        "cameraDistanceMm": 8500,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/carport-west.jpg",
+      "sector": "west",
+      "role": "material",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": -90,
+        "pitchDeg": 0,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "focalLength35mmEquivalent": 50,
+        "cameraDistanceMm": 8500,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/carport-detail-panel.jpg",
+      "sector": "detail",
+      "role": "condition",
+      "verified": true,
+      "anchorsVisible": false,
+      "captureMetadata": {
+        "angleType": "detail",
+        "cameraMode": "macro-detail",
+        "pitchGuidance": "surface-normal",
+        "lensGuidance": "macro-detail",
+        "coverage": "condition-detail",
+        "occluded": false
+      },
+      "pixelWidth": 2048,
+      "pixelHeight": 2048
+    }
+  ],
+  "materials": [
+    {
+      "materialId": "painted-white-wood-panel",
+      "hostElementId": "cladding-southwest",
+      "presetId": "painted-wood",
+      "materialSurfaces": [
+        "cladding",
+        "posts",
+        "fascia",
+        "stairs"
+      ],
+      "category": "wood",
+      "baseColor": "#f2f2ee",
+      "roughness": 0.52,
+      "metallic": 0,
+      "specular": 0.28,
+      "normalSource": "photo",
+      "textureScaleMm": 900,
+      "surfaceMapping": {
+        "projection": "planar",
+        "faces": [
+          "front"
+        ],
+        "scaleMm": 900,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/carport-west.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/carport-west.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "normal",
+          "path": "textures/carport-white-panel-normal.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 900,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/carport-west.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/carport-white-panel-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 900,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/carport-east.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/carport-east.jpg",
+        "photos/carport-west.jpg"
+      ],
+      "notes": "White horizontal wood cladding observed from verified facade photos."
+    },
+    {
+      "materialId": "dark-stone-foundation",
+      "hostElementId": "foundation-wall",
+      "presetId": "stone-masonry",
+      "materialSurfaces": [
+        "foundation-wall",
+        "retaining-wall",
+        "steps"
+      ],
+      "category": "stone",
+      "baseColor": "#33383a",
+      "roughness": 0.88,
+      "metallic": 0,
+      "specular": 0.16,
+      "normalSource": "photo",
+      "textureScaleMm": 500,
+      "surfaceMapping": {
+        "projection": "box",
+        "faces": [
+          "front",
+          "left",
+          "right"
+        ],
+        "scaleMm": 500,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/carport-south.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/carport-south.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "normal",
+          "path": "textures/carport-stone-foundation-normal.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 500,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/carport-south.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/carport-stone-foundation-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 500,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/carport-west.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/carport-south.jpg",
+        "photos/carport-west.jpg"
+      ],
+      "notes": "Dark stone/block foundation wall observed from facade photos."
+    }
+  ],
+  "conditions": [
+    {
+      "id": "white-panel-weathering",
+      "hostElementId": "cladding-southwest",
+      "type": "wear",
+      "severity": "low",
+      "locationHint": "Visible subtle weathering and unevenness on white horizontal paneling",
+      "confidence": "medium",
+      "verification": "verified",
+      "source": "photo",
+      "materialSurface": "cladding",
+      "photoSources": [
+        "photos/carport-detail-panel.jpg"
+      ],
+      "surfacePlacement": {
+        "hostElementId": "cladding-southwest",
+        "face": "front",
+        "u": 0.5,
+        "v": 0.52,
+        "widthMm": 1800,
+        "heightMm": 40,
+        "rotationDeg": 0
+      },
+      "notes": "Condition evidence must remain visible as texture/finish variation, not as geometry mutation."
+    }
+  ],
+  "conditionInspections": [
+    {
+      "id": "inspection-cladding",
+      "zone": "cladding",
+      "hostElementId": "cladding-southwest",
+      "materialCategory": "wood",
+      "status": "defect-found",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/carport-detail-panel.jpg"
+      ],
+      "conditionIds": [
+        "white-panel-weathering"
+      ],
+      "confidence": "medium",
+      "notes": "White wood cladding inspected; visible weathering is captured as condition evidence."
+    },
+    {
+      "id": "inspection-foundation",
+      "zone": "foundation",
+      "hostElementId": "foundation-wall",
+      "materialCategory": "stone",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/carport-south.jpg",
+        "photos/carport-west.jpg"
+      ],
+      "confidence": "medium",
+      "notes": "Foundation wall inspected from verified facade references."
+    },
+    {
+      "id": "inspection-openings",
+      "zone": "openings",
+      "hostElementId": "carport-frame",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/carport-north.jpg",
+        "photos/carport-south.jpg"
+      ],
+      "confidence": "medium",
+      "notes": "Facade openings inspected from orthogonal north/south references."
+    },
+    {
+      "id": "inspection-roof",
+      "zone": "roof",
+      "hostElementId": "roof",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/carport-south.jpg"
+      ],
+      "confidence": "medium",
+      "notes": "Roof edge and slope visually inspected from verified facade reference."
+    },
+    {
+      "id": "inspection-stairs",
+      "zone": "stairs",
+      "hostElementId": "street-stair-run",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/carport-south.jpg"
+      ],
+      "confidence": "medium",
+      "notes": "Street stair run inspected from verified facade reference."
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "photo-sector-names-normalized",
+      "text": "Facade photo labels are normalized to north/south/east/west sectors for the generic exterior-structure preset.",
+      "affectsGeometry": false,
+      "confidence": "medium"
+    }
+  ],
+  "outputTargets": [
+    "blend",
+    "glb",
+    "photoreal-render",
+    "technical-views",
+    "material-condition-report"
+  ]
+}

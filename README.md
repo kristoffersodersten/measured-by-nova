@@ -6,13 +6,25 @@ LLM-agnostic, local-first Model Context Protocol server for spatial reconstructi
 
 Measured by Nova connects any MCP-capable client to a local Blender installation over stdio. Its primary workflow is a spatial reconstruction project: verified dimensions, calibrated or structured photos, spatial constraints, and material metadata become deterministic 1:1 Blender geometry, photorealistic material/render outputs, and optimized downstream assets.
 
-Technical package/repository name: `nova-measured`.
+Measured is intended for high-trust digital viewing workflows where exact scale,
+material quality, surface defects, wear, and spatial feeling must be preserved:
+vehicles, boats, real estate, exterior structures, products, and other physical
+assets where buyers need inspectable representation rather than flattering
+imagery.
+
+Technical package name: `nova-measured`.
+Git repository name: `measured-by-nova`.
 
 The server is designed for sovereign local creative workflows: Blender runs on the user's machine, generated `.blend` files are written to a local output directory, and no telemetry or cloud fallback is included.
 
 ## Product Boundary
 
 Measured is not CAD, BIM, DWG/STEP export, legal surveying, or fabrication-grade tolerance software. It is a spatial reconstruction and physically measured visualization pipeline.
+
+Measured is also not an image-generation or beautification product. Photorealistic
+renders are delivery artifacts generated from locked Blender geometry and
+source-backed material evidence; they are not allowed to invent condition,
+damage, material quality, or geometry.
 
 Source-of-truth rules:
 
@@ -22,6 +34,15 @@ Source-of-truth rules:
 - Blender geometry, USD/glTF exports, and orthographic views are generated from the same locked 1:1 model.
 - Export templates may add layout, labels, scale bars, metadata, and notes only; they must not infer or reconstruct geometry.
 - The LLM is optional orchestration and is never authoritative.
+
+Governance rules:
+
+- Measured is subordinate to the Namaka constitution and Axiome Core execution
+  model.
+- Any future UI must follow NovaChat's Minimalistic Utilitarian Elegance and
+  Environment Truth contracts.
+- Capture, validation, rendering, export, and UI must expose locality,
+  confidence, provenance, and required human intervention.
 
 ## Product Scope
 
@@ -34,17 +55,25 @@ It is intended to reconstruct physical objects into accurate, editable, photorea
 - material metadata such as finish, color, reflectance, roughness, transparency, and texture scale
 - spatial structure such as planes, openings, edges, anchors, levels, and object relationships
 
-Target domains include real estate, vehicles, boats, consumer products, public environments, spatial commerce, virtual walkthroughs, and permit-support documentation.
+Target domains include car dealers, boat dealers, real estate brokers, renovation
+operators, consumer products, public environments, spatial commerce, virtual
+walkthroughs, and permit-support documentation.
 
 ## MVP Focus
 
 The first narrow vertical slice remains a facade-completion package for small building projects. It is a validation slice for the broader reconstruction architecture: measure, verify, generate a reviewed 3D representation, then export permit-support facade documentation.
+
+The broader product direction is a measured digital viewing pipeline: structured
+photos provide material, condition, and place evidence; exact measurements remain
+the source of truth for geometry and placement; Blender is the reviewed
+renderable truth; domain-specific exports package the locked result.
 
 See [MVP product contract](docs/mvp.md).
 
 ## Features
 
 - Create spatial reconstruction projects with confidence-tagged dimensions, camera captures, material metadata, planes, openings, steps, and profiles.
+- Validate digital viewing capture packages for vehicles, boats, properties, exterior structures, products, and custom assets.
 - Generate deterministic 1:1 Blender models from typed parametric profiles and measured constraints.
 - Align geometry with structured photographic evidence without letting photos override exact measurements.
 - Support photogrammetry-assisted texture projection and PBR material workflows as the pipeline matures.
@@ -141,6 +170,37 @@ Then import structured reference photos, define known dimensions, attach a profi
 
 Output is intentionally profile-oriented: the same measured project can later target permit-support drawings, customer previews, fabrication packages, web viewers, or internal QA without changing the source geometry.
 
+## Digital Viewing Capture
+
+Public trust classification is governed by the signed capture-package contract
+in [`docs/publication-trust.md`](docs/publication-trust.md). Manual uploads remain
+reference evidence and internal scores cannot upgrade public verification.
+
+Compute routing and remote verification follow
+[`docs/compute-distribution.md`](docs/compute-distribution.md), with operator and
+workspace rules in [`docs/operator-tooling.md`](docs/operator-tooling.md) and
+[`docs/remote-workspace.md`](docs/remote-workspace.md).
+
+The broader digital viewing pipeline starts with a strict capture contract. A
+capture package declares asset type, measured dimensions, required photo sectors,
+PBR material evidence, condition/wear evidence, assumptions, and output targets.
+
+Example fixtures:
+
+```bash
+fixtures/digital-viewing-vehicle-capture.json
+fixtures/digital-viewing-carport-capture.json
+```
+
+Validation rules are fail-closed:
+
+- unverified geometry-impacting measurements block model lock/export
+- missing required photo sectors block capture acceptance
+- photo-observed materials must reference source photos
+- verified scratches, dents, stains, repairs, or wear must reference source evidence
+- photos remain non-authoritative for geometry even when they are used for
+  material and condition evidence
+
 Supported export templates are `permit`, `permit-facade-pack`, `swedish-municipality`, `gothenburg-permit`, `measured-visualization`, `client-preview`, `fabrication`, `qa-validation`, `site-context`, `photo-alignment`, `measurement-book`, `web-viewer`, and `archive`.
 
 `cad-simulated` remains as a deprecated legacy alias for old clients. New integrations should not use CAD wording because the export is a measured Blender visualization, not a CAD-kernel result.
@@ -211,7 +271,11 @@ pnpm start
 - [Tool contracts and operation guide](docs/blender-mcp.md)
 - [Architecture](docs/architecture.md)
 - [Spatial reconstruction pipeline](docs/spatial-reconstruction.md)
+- [Digital viewing pipeline](docs/digital-viewing-pipeline.md)
+- [Namaka alignment contract](docs/namaka-alignment.md)
+- [UI/UX contract](docs/ui-ux-contract.md)
 - [MVP product contract](docs/mvp.md)
+- [Productization plan](docs/productization.md)
 - [Measurement data contract](docs/data-contract.md)
 - [Quality gates](docs/quality-gates.md)
 - [Threat model](docs/threat-model.md)
