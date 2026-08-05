@@ -9,9 +9,10 @@ import type { BlenderConfig, BlenderToolResult } from "./contracts.js";
 const MACOS_APP_PATH = "/Applications/Blender.app/Contents/MacOS/Blender";
 
 export async function resolveBlenderPath(configuredPath?: string): Promise<string> {
-  if (configuredPath) {
-    await ensureExecutable(configuredPath);
-    return configuredPath;
+  const explicitPath = configuredPath ?? process.env.BLENDER_PATH;
+  if (explicitPath) {
+    await ensureExecutable(explicitPath);
+    return explicitPath;
   }
 
   if (await canExecute(MACOS_APP_PATH)) {

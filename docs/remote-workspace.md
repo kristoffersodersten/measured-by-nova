@@ -5,6 +5,7 @@ This repository's remote metabolic workspace is:
 ```text
 Host: ubuntu
 Workspace: /home/krille/work/Measured by Nova
+Blender: /snap/blender/current/blender
 ```
 
 The Mac Mini may open the workspace through VS Code Remote SSH, but heavy
@@ -47,7 +48,7 @@ remote-compute-provision --host ubuntu
 Run a remote command:
 
 ```bash
-remote-compute-run --host ubuntu -- pnpm test
+remote-compute-run --host ubuntu -- env BLENDER_PATH=/snap/blender/current/blender pnpm test
 ```
 
 Audit the contract:

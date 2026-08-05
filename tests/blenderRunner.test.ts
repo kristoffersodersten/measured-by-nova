@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { safeOutputPath, validateBlenderJobInputFiles } from "../src/blenderRunner.js";
+import { resolveBlenderPath, safeOutputPath, validateBlenderJobInputFiles } from "../src/blenderRunner.js";
 
 const OnePixelPng = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
@@ -16,6 +16,20 @@ async function writeFileUnderOutput(outputDir: string, relativePath: string): Pr
 }
 
 describe("safeOutputPath", () => {
+  it("uses the explicit BLENDER_PATH for direct library calls", async () => {
+    const previousPath = process.env.BLENDER_PATH;
+    process.env.BLENDER_PATH = process.execPath;
+    try {
+      await expect(resolveBlenderPath()).resolves.toBe(process.execPath);
+    } finally {
+      if (previousPath === undefined) {
+        delete process.env.BLENDER_PATH;
+      } else {
+        process.env.BLENDER_PATH = previousPath;
+      }
+    }
+  });
+
   it("keeps generated files inside outputDir", () => {
     const output = safeOutputPath("/tmp/blender-output", "model.blend");
 
