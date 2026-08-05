@@ -1,0 +1,67 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Compute Guard: Check command",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/check-compute-distribution.sh \"${input:guardCommand}\"",
+      "problemMatcher": []
+    },
+    {
+      "label": "Remote Compute: Dry run command",
+      "type": "shell",
+      "command": "${env:HOME}/.codex/bin/remote-compute-run --dry-run -- ${input:remoteCommand}",
+      "problemMatcher": []
+    },
+    {
+      "label": "Remote Compute: Run command on Hetzner",
+      "type": "shell",
+      "command": "${env:HOME}/.codex/bin/remote-compute-run -- ${input:remoteCommand}",
+      "problemMatcher": []
+    },
+    {
+      "label": "Remote Compute: Provision workspace",
+      "type": "shell",
+      "command": "${env:HOME}/.codex/bin/remote-compute-provision",
+      "problemMatcher": []
+    },
+    {
+      "label": "Remote Compute: Git status on Hetzner",
+      "type": "shell",
+      "command": "${env:HOME}/.codex/bin/remote-compute-run --no-update -- git status --short --branch",
+      "problemMatcher": []
+    },
+    {
+      "label": "Remote Compute: Doctor",
+      "type": "shell",
+      "command": "${env:HOME}/.codex/bin/remote-compute-doctor --quick ${workspaceFolder}",
+      "problemMatcher": []
+    },
+    {
+      "label": "Remote Compute: Inventory",
+      "type": "shell",
+      "command": "${env:HOME}/.codex/bin/remote-compute-inventory ${workspaceFolder}",
+      "problemMatcher": []
+    },
+    {
+      "label": "Local Sovereignty Audit",
+      "type": "shell",
+      "command": "${env:HOME}/.codex/bin/local-sovereignty-audit",
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "guardCommand",
+      "type": "promptString",
+      "description": "Workload or local command to classify",
+      "default": "pnpm test"
+    },
+    {
+      "id": "remoteCommand",
+      "type": "promptString",
+      "description": "Command to run on Hetzner from this repo's remote workspace",
+      "default": "git status --short --branch"
+    }
+  ]
+}
