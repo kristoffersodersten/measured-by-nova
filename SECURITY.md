@@ -50,5 +50,8 @@ Security-sensitive product rules:
 ## Supply Chain
 
 - Keep dependencies minimal.
+- Run `pnpm audit:security` before release; critical and high-severity advisories block release.
 - Run `pnpm lint`, `pnpm test`, and `pnpm build` before release.
+- Security overrides in `pnpm-workspace.yaml` pin patched transitive versions until their direct parents adopt them. Review and remove each override when upstream constraints make it redundant.
+- Keep the minimum-release-age policy enabled. Do not bypass it to consume a newly published security fix; select the oldest compatible patched release that satisfies both gates.
 - Do not commit generated `.blend`, PDF, PNG, cache, or local output artifacts unless they are intentional fixtures.
