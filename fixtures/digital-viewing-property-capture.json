@@ -1,0 +1,628 @@
+{
+  "schemaVersion": 1,
+  "captureId": "property-demo-capture",
+  "projectId": "property-demo",
+  "assetType": "property",
+  "unit": "mm",
+  "requiredSectors": [
+    "north",
+    "south",
+    "east",
+    "west",
+    "interior",
+    "detail"
+  ],
+  "modelElements": [
+    {
+      "id": "building-envelope",
+      "kind": "body",
+      "renderable": true,
+      "confidence": "high",
+      "source": "measured_geometry"
+    },
+    {
+      "id": "facade-cladding",
+      "kind": "panel",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    },
+    {
+      "id": "window-set",
+      "kind": "surface",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    },
+    {
+      "id": "stone-foundation",
+      "kind": "foundation",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    },
+    {
+      "id": "roof-fittings",
+      "kind": "surface",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    },
+    {
+      "id": "interior-finish",
+      "kind": "surface",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    }
+  ],
+  "measurements": [
+    {
+      "id": "overall-width",
+      "label": "Overall width",
+      "value": 11800,
+      "unit": "mm",
+      "confidence": "high",
+      "verified": true,
+      "source": "manual_measurement",
+      "placement": {
+        "hostElementId": "building-envelope",
+        "axis": "x",
+        "from": "west exterior wall plane",
+        "to": "east exterior wall plane",
+        "referenceFrame": "site-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 5
+    },
+    {
+      "id": "overall-depth",
+      "label": "Overall depth",
+      "value": 8400,
+      "unit": "mm",
+      "confidence": "high",
+      "verified": true,
+      "source": "manual_measurement",
+      "placement": {
+        "hostElementId": "building-envelope",
+        "axis": "y",
+        "from": "south exterior wall plane",
+        "to": "north exterior wall plane",
+        "referenceFrame": "site-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 5
+    },
+    {
+      "id": "overall-height",
+      "label": "Overall height",
+      "value": 4650,
+      "unit": "mm",
+      "confidence": "high",
+      "verified": true,
+      "source": "manual_measurement",
+      "placement": {
+        "hostElementId": "building-envelope",
+        "axis": "z",
+        "from": "finished ground reference",
+        "to": "highest roof/facade point",
+        "referenceFrame": "site-local"
+      },
+      "affectsGeometry": true,
+      "tolerance": 5
+    }
+  ],
+  "photos": [
+    {
+      "path": "photos/property-north.jpg",
+      "sector": "north",
+      "role": "geometry_alignment",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": 180,
+        "pitchDeg": 0,
+        "focalLength35mmEquivalent": 45,
+        "cameraDistanceMm": 12000,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/property-south.jpg",
+      "sector": "south",
+      "role": "geometry_alignment",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": 0,
+        "pitchDeg": 0,
+        "focalLength35mmEquivalent": 45,
+        "cameraDistanceMm": 12000,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/property-east.jpg",
+      "sector": "east",
+      "role": "material",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": 90,
+        "pitchDeg": 0,
+        "focalLength35mmEquivalent": 45,
+        "cameraDistanceMm": 12000,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/property-west.jpg",
+      "sector": "west",
+      "role": "material",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": -90,
+        "pitchDeg": 0,
+        "focalLength35mmEquivalent": 45,
+        "cameraDistanceMm": 12000,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/property-interior.jpg",
+      "sector": "interior",
+      "role": "material",
+      "verified": true,
+      "anchorsVisible": false,
+      "captureMetadata": {
+        "angleType": "interior",
+        "cameraMode": "perspective-reference",
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-sector",
+        "occluded": false,
+        "lightingReference": "mixed-measured",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/property-detail.jpg",
+      "sector": "detail",
+      "role": "condition",
+      "verified": true,
+      "anchorsVisible": false,
+      "captureMetadata": {
+        "angleType": "detail",
+        "cameraMode": "macro-detail",
+        "pitchGuidance": "surface-normal",
+        "lensGuidance": "macro-detail",
+        "coverage": "condition-detail",
+        "occluded": false
+      },
+      "pixelWidth": 2048,
+      "pixelHeight": 2048
+    }
+  ],
+  "materials": [
+    {
+      "materialId": "facade-painted-wood",
+      "hostElementId": "facade-cladding",
+      "presetId": "painted-wood",
+      "materialSurfaces": [
+        "cladding",
+        "trim",
+        "doors"
+      ],
+      "category": "wood",
+      "baseColor": "#f2f2ee",
+      "roughness": 0.48,
+      "metallic": 0,
+      "specular": 0.32,
+      "normalSource": "photo",
+      "textureScaleMm": 900,
+      "surfaceMapping": {
+        "projection": "planar",
+        "faces": [
+          "front"
+        ],
+        "scaleMm": 900,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/property-north.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/property-north.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "normal",
+          "path": "textures/property-facade-wood-normal.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 900,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/property-north.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/property-facade-wood-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 900,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/property-east.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/property-north.jpg",
+        "photos/property-east.jpg"
+      ]
+    },
+    {
+      "materialId": "foundation-stone",
+      "hostElementId": "stone-foundation",
+      "presetId": "stone-masonry",
+      "materialSurfaces": [
+        "foundation",
+        "masonry",
+        "paving"
+      ],
+      "category": "stone",
+      "baseColor": "#33383a",
+      "roughness": 0.86,
+      "metallic": 0,
+      "specular": 0.18,
+      "normalSource": "photo",
+      "textureScaleMm": 500,
+      "surfaceMapping": {
+        "projection": "box",
+        "faces": [
+          "front",
+          "left",
+          "right"
+        ],
+        "scaleMm": 500,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/property-south.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/property-south.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "normal",
+          "path": "textures/property-foundation-stone-normal.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 500,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/property-south.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/property-foundation-stone-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 500,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/property-west.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/property-south.jpg",
+        "photos/property-west.jpg"
+      ]
+    },
+    {
+      "materialId": "roof-fittings-metal",
+      "hostElementId": "roof-fittings",
+      "presetId": "brushed-metal",
+      "materialSurfaces": [
+        "gutters",
+        "railings",
+        "fittings"
+      ],
+      "category": "metal",
+      "baseColor": "#b8b8b3",
+      "roughness": 0.42,
+      "metallic": 1,
+      "specular": 0.55,
+      "normalSource": "photo",
+      "textureScaleMm": 300,
+      "surfaceMapping": {
+        "projection": "uv",
+        "faces": [
+          "top",
+          "front"
+        ],
+        "scaleMm": 300,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/property-west.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/property-west.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "metallic",
+          "path": "textures/property-roof-metal-metallic.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 300,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/property-west.jpg"
+        },
+        {
+          "type": "normal",
+          "path": "textures/property-roof-metal-normal.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 300,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/property-west.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/property-roof-metal-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 300,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/property-west.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/property-west.jpg"
+      ]
+    },
+    {
+      "materialId": "window-glass",
+      "hostElementId": "window-set",
+      "presetId": "clear-glass",
+      "materialSurfaces": [
+        "windows",
+        "glazed-doors"
+      ],
+      "category": "glass",
+      "baseColor": "#dfefff",
+      "roughness": 0.04,
+      "metallic": 0,
+      "specular": 0.9,
+      "transmission": 0.72,
+      "normalSource": "none",
+      "textureScaleMm": 1000,
+      "surfaceMapping": {
+        "projection": "box",
+        "faces": [
+          "front",
+          "left",
+          "right"
+        ],
+        "scaleMm": 1000,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/property-east.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/property-east.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "alpha",
+          "path": "textures/property-window-glass-alpha.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 1000,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/property-east.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/property-window-glass-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 1000,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/property-north.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/property-east.jpg",
+        "photos/property-north.jpg"
+      ]
+    }
+  ],
+  "conditions": [
+    {
+      "id": "facade-light-fading",
+      "hostElementId": "facade-cladding",
+      "type": "fading",
+      "severity": "low",
+      "locationHint": "North facade painted wood surface",
+      "confidence": "medium",
+      "verification": "verified",
+      "source": "photo",
+      "materialSurface": "cladding",
+      "photoSources": [
+        "photos/property-detail.jpg"
+      ],
+      "surfacePlacement": {
+        "hostElementId": "facade-cladding",
+        "face": "front",
+        "u": 0.44,
+        "v": 0.55,
+        "widthMm": 900,
+        "heightMm": 260,
+        "rotationDeg": 0
+      },
+      "notes": "Light fading evidence is tracked as condition truth, not as geometry."
+    }
+  ],
+  "conditionInspections": [
+    {
+      "id": "inspection-facade",
+      "zone": "facade",
+      "hostElementId": "facade-cladding",
+      "materialCategory": "wood",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/property-north.jpg",
+        "photos/property-east.jpg"
+      ],
+      "conditionIds": [],
+      "confidence": "medium",
+      "notes": "Facade cladding inspected from verified exterior photos."
+    },
+    {
+      "id": "inspection-windows-doors",
+      "zone": "windows-doors",
+      "hostElementId": "window-set",
+      "materialCategory": "glass",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/property-east.jpg",
+        "photos/property-north.jpg"
+      ],
+      "conditionIds": [],
+      "confidence": "medium",
+      "notes": "Window and door glass inspected from verified exterior photos."
+    },
+    {
+      "id": "inspection-masonry-foundation",
+      "zone": "masonry-foundation",
+      "hostElementId": "stone-foundation",
+      "materialCategory": "stone",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/property-south.jpg",
+        "photos/property-west.jpg"
+      ],
+      "conditionIds": [],
+      "confidence": "medium",
+      "notes": "Stone and masonry foundation inspected from verified exterior photos."
+    },
+    {
+      "id": "inspection-roof-fittings",
+      "zone": "roof-fittings",
+      "hostElementId": "roof-fittings",
+      "materialCategory": "metal",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/property-west.jpg"
+      ],
+      "conditionIds": [],
+      "confidence": "medium",
+      "notes": "Metal roof fittings inspected from verified west reference."
+    },
+    {
+      "id": "inspection-interior-finishes",
+      "zone": "interior-finishes",
+      "hostElementId": "interior-finish",
+      "materialCategory": "wood",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/property-interior.jpg"
+      ],
+      "conditionIds": [],
+      "confidence": "medium",
+      "notes": "Interior finish surfaces inspected from verified interior reference."
+    }
+  ],
+  "assumptions": [],
+  "outputTargets": [
+    "blend",
+    "glb",
+    "photoreal-render",
+    "material-condition-report"
+  ]
+}

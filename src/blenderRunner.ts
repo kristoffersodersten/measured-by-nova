@@ -9,9 +9,10 @@ import type { BlenderConfig, BlenderToolResult } from "./contracts.js";
 const MACOS_APP_PATH = "/Applications/Blender.app/Contents/MacOS/Blender";
 
 export async function resolveBlenderPath(configuredPath?: string): Promise<string> {
-  if (configuredPath) {
-    await ensureExecutable(configuredPath);
-    return configuredPath;
+  const explicitPath = configuredPath ?? process.env.BLENDER_PATH;
+  if (explicitPath) {
+    await ensureExecutable(explicitPath);
+    return explicitPath;
   }
 
   if (await canExecute(MACOS_APP_PATH)) {
@@ -38,11 +39,12 @@ export async function runBlenderJob(
   await mkdir(config.outputDir, { recursive: true });
   const outputPath = safeOutputPath(config.outputDir, outputFile);
   const blenderPath = await resolveBlenderPath(config.blenderPath);
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "codex-blender-mcp-"));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "nova-measured-"));
   const payloadPath = path.join(tempDir, "payload.json");
   const bridgePath = await resolveBridgePath();
 
-  await writeFile(payloadPath, JSON.stringify({ ...asRecord(payload), outputPath }), "utf8");
+  await validateBlenderJobInputFiles(config.outputDir, payload);
+  await writeFile(payloadPath, JSON.stringify({ ...asRecord(payload), outputPath, outputRoot: path.resolve(config.outputDir) }), "utf8");
 
   const result = await runProcess(
     blenderPath,
@@ -63,6 +65,39 @@ export async function runBlenderJob(
     ...result,
     outputPath
   };
+}
+
+export async function validateBlenderJobInputFiles(outputDir: string, payload: unknown): Promise<void> {
+  const job = asRecord(payload);
+  if (job.operation !== "digital_viewing_render") {
+    return;
+  }
+
+  const renderManifest = asOptionalRecord(job.renderManifest);
+  const renderPreset = asOptionalRecord(renderManifest?.renderPreset);
+  if (renderPreset?.deliveryTier !== "premium-sales") {
+    return;
+  }
+
+  const missingTexturePaths: string[] = [];
+  for (const texturePath of uniqueSorted(textureMapPaths(renderManifest?.materials))) {
+    if (!(await fileExists(safeOutputPath(outputDir, texturePath)))) {
+      missingTexturePaths.push(texturePath);
+    }
+  }
+  if (missingTexturePaths.length > 0) {
+    throw new Error(`Missing required digital viewing texture files: ${missingTexturePaths.join(", ")}`);
+  }
+
+  const missingPhotoPaths: string[] = [];
+  for (const photoPath of uniqueSorted(referencePhotoPaths(renderManifest))) {
+    if (!(await fileExists(safeOutputPath(outputDir, photoPath)))) {
+      missingPhotoPaths.push(photoPath);
+    }
+  }
+  if (missingPhotoPaths.length > 0) {
+    throw new Error(`Missing required digital viewing reference photos: ${missingPhotoPaths.join(", ")}`);
+  }
 }
 
 async function runProcess(command: string, args: string[], timeoutMs: number): Promise<Omit<BlenderToolResult, "outputPath">> {
@@ -141,4 +176,75 @@ function asRecord(value: unknown): Record<string, unknown> {
     throw new Error("Payload must be an object.");
   }
   return value as Record<string, unknown>;
+}
+
+function asOptionalRecord(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
+}
+
+function textureMapPaths(materials: unknown): string[] {
+  if (!Array.isArray(materials)) {
+    return [];
+  }
+
+  return materials.flatMap((material) => {
+    const materialRecord = asOptionalRecord(material);
+    if (!Array.isArray(materialRecord?.textureMaps)) {
+      return [];
+    }
+
+    return materialRecord.textureMaps.flatMap((textureMap) => {
+      const textureMapRecord = asOptionalRecord(textureMap);
+      return typeof textureMapRecord?.path === "string" ? [textureMapRecord.path] : [];
+    });
+  });
+}
+
+function referencePhotoPaths(renderManifest: Record<string, unknown> | undefined): string[] {
+  if (!renderManifest) {
+    return [];
+  }
+
+  const renderPreset = asOptionalRecord(renderManifest.renderPreset);
+  const camera = asOptionalRecord(renderPreset?.camera);
+  const lighting = asOptionalRecord(renderPreset?.lighting);
+  const materials = Array.isArray(renderManifest.materials) ? renderManifest.materials : [];
+  const conditions = Array.isArray(renderManifest.conditions) ? renderManifest.conditions : [];
+
+  return [
+    ...stringValues([camera?.referencePhoto, lighting?.referencePhoto]),
+    ...materials.flatMap(materialReferencePhotoPaths),
+    ...conditions.flatMap((condition) => arrayStringValues(asOptionalRecord(condition)?.photoSources))
+  ];
+}
+
+function materialReferencePhotoPaths(material: unknown): string[] {
+  const materialRecord = asOptionalRecord(material);
+  if (!materialRecord) {
+    return [];
+  }
+
+  const surfaceMapping = asOptionalRecord(materialRecord.surfaceMapping);
+  const appearanceCalibration = asOptionalRecord(materialRecord.appearanceCalibration);
+  const textureMaps = Array.isArray(materialRecord.textureMaps) ? materialRecord.textureMaps : [];
+  return [
+    ...arrayStringValues(materialRecord.photoSources),
+    ...stringValues([surfaceMapping?.sourcePhoto, appearanceCalibration?.sourcePhoto]),
+    ...textureMaps.flatMap((textureMap) => stringValues([asOptionalRecord(textureMap)?.sourcePhoto]))
+  ];
+}
+
+function stringValues(values: unknown[]): string[] {
+  return values.filter((value): value is string => typeof value === "string");
+}
+
+function arrayStringValues(value: unknown): string[] {
+  return Array.isArray(value) ? stringValues(value) : [];
+}
+
+function uniqueSorted(values: string[]): string[] {
+  return Array.from(new Set(values)).sort((left, right) => left.localeCompare(right));
 }

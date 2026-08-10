@@ -1,0 +1,131 @@
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import { describe, expect, it } from "vitest";
+import {
+  capturePackagePayloadSha256,
+  classifyPublicTrust,
+  customerRatingVisibility,
+  InternalTrustScoresSchema,
+  PublicationCapturePackageSchema,
+  verifyPublicationCapturePackage
+} from "../src/publicationTrust.js";
+
+const content = Buffer.from("native capture evidence");
+const artifact = { path: "capture/evidence.json", content };
+const binding = {
+  schemaVersion: 1 as const,
+  packageId: "package-1",
+  projectId: "project-1",
+  objectId: "object-1",
+  captureProtocolId: "protocol-1",
+  kitId: "kit-1",
+  commissioningPartyId: "customer-1",
+  capturedAt: "2026-08-05T10:00:00.000Z",
+  manifest: [{
+    path: artifact.path,
+    sha256: createHash("sha256").update(content).digest("hex"),
+    sizeBytes: content.byteLength
+  }]
+};
+
+function signedPackage() {
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  const payloadHash = capturePackagePayloadSha256(binding);
+  const capturePackage = PublicationCapturePackageSchema.parse({
+    source: "native_app",
+    binding,
+    signature: {
+      algorithm: "Ed25519",
+      keyId: "native-key-1",
+      signedPayloadSha256: payloadHash,
+      valueBase64: sign(null, Buffer.from(payloadHash, "hex"), privateKey).toString("base64")
+    }
+  });
+  return { capturePackage, publicKey };
+}
+
+describe("publication trust contract", () => {
+  it("verifies a complete unchanged native capture package and classifies it as verified", () => {
+    const { capturePackage, publicKey } = signedPackage();
+    const verification = verifyPublicationCapturePackage(capturePackage, [artifact], () => publicKey);
+
+    expect(verification.valid).toBe(true);
+    expect(verification.verifiedBindings).toEqual([
+      "project", "object", "capture_protocol", "kit", "commissioning_party", "content", "signature"
+    ]);
+    expect(classifyPublicTrust({
+      capturePackage,
+      packageVerification: verification,
+      evidenceScopes: [
+        { id: "dimensions", kind: "measurement", required: true, verified: true },
+        { id: "materials", kind: "material_source", required: true, verified: true }
+      ]
+    }).category).toBe("verified");
+  });
+
+  it("fails closed when signed capture content is changed", () => {
+    const { capturePackage, publicKey } = signedPackage();
+    const verification = verifyPublicationCapturePackage(
+      capturePackage,
+      [{ path: artifact.path, content: Buffer.from("mutated evidence") }],
+      () => publicKey
+    );
+
+    expect(verification.valid).toBe(false);
+    expect(verification.codes).toEqual(expect.arrayContaining(["artifact_size_mismatch", "artifact_hash_mismatch"]));
+    expect(classifyPublicTrust({
+      capturePackage,
+      packageVerification: verification,
+      evidenceScopes: [{ id: "dimensions", kind: "measurement", required: true, verified: true }]
+    }).category).toBe("reference");
+  });
+
+  it("keeps manual uploads as reference regardless of verified evidence declarations", () => {
+    const capturePackage = PublicationCapturePackageSchema.parse({ source: "manual_upload", binding });
+    const verification = verifyPublicationCapturePackage(capturePackage, [artifact], () => undefined);
+
+    expect(verification.codes).toContain("manual_upload");
+    expect(classifyPublicTrust({
+      capturePackage,
+      packageVerification: verification,
+      evidenceScopes: [{ id: "dimensions", kind: "measurement", required: true, verified: true }]
+    }).category).toBe("reference");
+  });
+
+  it("derives partial verification and disputes from exact evidence scopes", () => {
+    const { capturePackage, publicKey } = signedPackage();
+    const verification = verifyPublicationCapturePackage(capturePackage, [artifact], () => publicKey);
+    const evidenceScopes = [
+      { id: "dimensions", kind: "measurement" as const, required: true, verified: true },
+      { id: "materials", kind: "material_source" as const, required: true, verified: false }
+    ];
+
+    expect(classifyPublicTrust({ capturePackage, packageVerification: verification, evidenceScopes })).toMatchObject({
+      category: "partially_verified",
+      verifiedScopeIds: ["dimensions"],
+      unverifiedRequiredScopeIds: ["materials"]
+    });
+    expect(classifyPublicTrust({
+      capturePackage,
+      packageVerification: verification,
+      evidenceScopes,
+      disputes: [{ scopeId: "dimensions", status: "open", reason: "Measurement is contested." }]
+    })).toMatchObject({ category: "disputed", disputedScopeIds: ["dimensions"] });
+  });
+
+  it("keeps internal scores and customer ratings outside public classification", () => {
+    expect(InternalTrustScoresSchema.parse({ risk: 0.92, fidelity: 0.18, visibility: "internal_only" })).toEqual({
+      risk: 0.92,
+      fidelity: 0.18,
+      visibility: "internal_only"
+    });
+    expect(customerRatingVisibility({ average: 4.8, count: 4, minimumDisplayCount: 5 })).toEqual({
+      visible: false,
+      count: 4
+    });
+    expect(customerRatingVisibility({ average: 4.8, count: 5, minimumDisplayCount: 5 })).toEqual({
+      visible: true,
+      average: 4.8,
+      count: 5
+    });
+  });
+});

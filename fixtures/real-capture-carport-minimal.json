@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "captureId": "real-carport-minimal",
+  "projectId": "real-carport-minimal",
+  "projectType": "carport",
+  "unit": "mm",
+  "dimensions": {
+    "width": { "valueMm": 7676, "confidence": "high", "source": "permit_pdf", "verified": true },
+    "depth": { "valueMm": 6240, "confidence": "high", "source": "permit_pdf", "verified": true },
+    "westHighSideHeight": { "valueMm": 3455, "confidence": "high", "source": "permit_pdf", "verified": true },
+    "eastLowSideHeight": { "valueMm": 3174, "confidence": "high", "source": "permit_pdf", "verified": true },
+    "roofSlopePercent": { "value": 3.7, "confidence": "high", "source": "permit_pdf", "verified": true }
+  },
+  "foundationHeights": {
+    "southwest": { "roadSideMm": 0, "middleMm": 685, "innerMm": 695 },
+    "northeast": { "outerTowardRoadMm": 530, "middleMm": 500, "innerMm": 630 }
+  },
+  "steps": [
+    {
+      "stepDepthMm": 295,
+      "stepHeightMm": 140,
+      "count": 3,
+      "locationHint": "entrance/platform",
+      "confidence": "medium",
+      "verified": true
+    }
+  ],
+  "neighborBoundary": {
+    "from": "outermost_southwest_post",
+    "distanceMm": 7692,
+    "confidence": "medium",
+    "verified": true
+  },
+  "photos": [
+    { "path": "photos/north.jpg", "view": "north", "role": "reference", "verified": true },
+    { "path": "photos/south.jpg", "view": "south", "role": "reference", "verified": true },
+    { "path": "photos/east.jpg", "view": "east", "role": "reference", "verified": true },
+    { "path": "photos/west.jpg", "view": "west", "role": "reference", "verified": true }
+  ],
+  "assumptions": [
+    {
+      "id": "panel-spacing-reference",
+      "text": "Panel spacing is visually represented from reference photos and does not define measured geometry.",
+      "confidence": "low",
+      "source": "photo_reference",
+      "affectsGeometry": false
+    }
+  ]
+}

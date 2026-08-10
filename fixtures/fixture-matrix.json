@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "matrixId": "measured-mvp-fixture-matrix-v1",
+  "cases": [
+    {
+      "id": "synthetic-carport-basic",
+      "projectPath": "fixtures/synthetic-carport-project.json",
+      "expected": {
+        "ok": true,
+        "reason": "Complete verified geometry, four facade references, passing validation, locked model."
+      }
+    },
+    {
+      "id": "synthetic-carport-missing-facade",
+      "projectPath": "fixtures/synthetic-carport-project.json",
+      "mutations": [
+        { "type": "removePhotoView", "view": "west" }
+      ],
+      "expected": {
+        "ok": false,
+        "reason": "Missing west facade reference."
+      }
+    },
+    {
+      "id": "synthetic-carport-low-confidence-geometry",
+      "projectPath": "fixtures/synthetic-carport-project.json",
+      "mutations": [
+        {
+          "type": "addAssumption",
+          "assumption": {
+            "id": "unknown-roof-height",
+            "text": "Roof height guessed from a photo.",
+            "confidence": "low",
+            "source": "photo_reference",
+            "affectsGeometry": true
+          }
+        }
+      ],
+      "expected": {
+        "ok": false,
+        "reason": "Low-confidence geometry-impacting assumption."
+      }
+    },
+    {
+      "id": "synthetic-carport-extreme-roof-slope",
+      "projectPath": "fixtures/synthetic-carport-project.json",
+      "mutations": [
+        { "type": "setCarportRoofSlopePercent", "value": 18 }
+      ],
+      "expected": {
+        "ok": true,
+        "reason": "Extreme but explicitly measured profile values are allowed by capture contract."
+      }
+    },
+    {
+      "id": "synthetic-shed-basic",
+      "projectPath": "fixtures/synthetic-carport-project.json",
+      "mutations": [
+        { "type": "setProjectId", "value": "synthetic-shed-basic" },
+        { "type": "setProfile", "profile": "simple-shed" }
+      ],
+      "expected": {
+        "ok": true,
+        "reason": "Generic profile path remains valid when measurement and facade references exist."
+      }
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "projectId": "synthetic-carport",
+  "unit": "mm",
+  "photos": [
+    { "path": "photos/north.jpg", "view": "north", "role": "reference", "confidence": "low" },
+    { "path": "photos/south.jpg", "view": "south", "role": "reference", "confidence": "low" },
+    { "path": "photos/east.jpg", "view": "east", "role": "reference", "confidence": "low" },
+    { "path": "photos/west.jpg", "view": "west", "role": "reference", "confidence": "low" }
+  ],
+  "dimensions": [
+    { "label": "width", "valueMm": 7676, "confidence": "high", "source": "permit_pdf" },
+    { "label": "depth", "valueMm": 6240, "confidence": "high", "source": "permit_pdf" },
+    { "label": "west-high-side-height", "valueMm": 3455, "confidence": "high", "source": "permit_pdf" },
+    { "label": "east-low-side-height", "valueMm": 3174, "confidence": "high", "source": "permit_pdf" }
+  ],
+  "planes": [],
+  "elements": [],
+  "openings": [],
+  "steps": [],
+  "assumptions": [
+    {
+      "id": "panel-spacing-reference",
+      "text": "Panel spacing is visually represented from reference photos and does not define measured geometry.",
+      "confidence": "low",
+      "source": "photo_reference",
+      "affectsGeometry": false
+    }
+  ],
+  "profiles": [
+    {
+      "id": "profile-carport",
+      "profile": "carport",
+      "confidence": "high",
+      "parameters": {
+        "widthMm": 7676,
+        "depthMm": 6240,
+        "roofSlopePercent": 3.7,
+        "westHighSideHeightMm": 3455,
+        "eastLowSideHeightMm": 3174,
+        "foundationHeights": {
+          "southwest": { "roadSideMm": 0, "middleMm": 685, "innerMm": 695 },
+          "northeast": { "outerTowardRoadMm": 530, "middleMm": 500, "innerMm": 630 }
+        },
+        "steps": [
+          { "stepDepthMm": 295, "stepHeightMm": 140, "count": 3, "locationHint": "entrance/platform" }
+        ],
+        "neighborBoundary": {
+          "from": "outermost_southwest_post",
+          "distanceMm": 7692
+        },
+        "claddingDirection": "horizontal"
+      }
+    }
+  ],
+  "validation": {
+    "ok": true,
+    "checks": [
+      { "name": "known_dimensions:width", "ok": true, "message": "width=7676mm", "confidence": "high" },
+      { "name": "known_dimensions:depth", "ok": true, "message": "depth=6240mm", "confidence": "high" }
+    ],
+    "warnings": []
+  },
+  "modelLock": {
+    "locked": true,
+    "lockedAt": "2026-05-01T00:00:00.000Z",
+    "lockedBy": "fixture",
+    "reason": "Synthetic fixture reviewed for deterministic MVP pipeline tests."
+  },
+  "artifacts": {}
+}
