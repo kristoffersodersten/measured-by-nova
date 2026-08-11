@@ -380,6 +380,7 @@ def export_template(payload):
             "normalization": normalization_report,
         },
         "artifacts": expected,
+        "modelLock": options.get("lockedModel"),
         "capabilityManifest": capability_manifest,
         "strategies": options.get("strategies", []),
         "options": options,
