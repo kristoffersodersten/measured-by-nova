@@ -11,6 +11,8 @@ import { buildDigitalViewingAssetBundleManifest, buildDigitalViewingBlenderRende
 import { MeasurementProjectSchema } from "../src/measurementContracts.js";
 import { materializeProfiles } from "../src/profileGenerator.js";
 import { buildOrthographicViewRegistry } from "../src/viewRegistry.js";
+import { evaluateFacadeQaManifest } from "../src/facadeQa.js";
+import { hashSourceProject } from "../src/modelLock.js";
 
 const ManifestSchema = z.object({
   schemaVersion: z.literal(1),
@@ -31,6 +33,7 @@ const ManifestSchema = z.object({
   }).passthrough(),
   strategies: z.array(z.string()),
   artifacts: z.record(z.string()),
+  modelLock: z.object({ modelHash: z.string() }).passthrough(),
   layout: z.object({
     paper: z.object({ format: z.literal("A3"), orientation: z.literal("landscape"), widthMm: z.number(), heightMm: z.number() }),
     scale: z.string(),
@@ -236,6 +239,12 @@ describe("golden manifest integration", () => {
     const materializedProject = materializeProfiles(MeasurementProjectSchema.parse(fixtureRaw));
     const project = {
       ...materializedProject,
+      modelLock: {
+        ...materializedProject.modelLock,
+        modelArtifact: "measurement-projects/synthetic-carport/artifacts/synthetic-carport.blend",
+        modelHash: "a".repeat(64),
+        sourceProjectHash: "b".repeat(64)
+      },
       viewRegistry: buildOrthographicViewRegistry(materializedProject.elements, ["plan", "north", "south", "east", "west", "section_a_a"])
     };
     const geometryBefore = hashGeometry(project);
@@ -315,6 +324,25 @@ describe("golden manifest integration", () => {
     expect(manifest.layout.measurements).toHaveLength(4);
     expect(manifest.layout.assumptions).toHaveLength(1);
     expect(manifest.layout.materialColorNotes).toContain("Observed/model metadata: white-painted-wood");
+    const exportOutputDir = path.join(outputDir, "run-a", "exports", template);
+    const facadeQa = await evaluateFacadeQaManifest({
+      manifest,
+      project,
+      requiredViews: ["north", "south", "east", "west"],
+      exportOutputDir,
+      sourceProjectHashBefore: hashSourceProject(project)
+    });
+    expect(facadeQa).toEqual({ ok: true, blocking: [], visualDiff: { requiredForContract: false, evaluated: false } });
+    expect((await evaluateFacadeQaManifest({
+      manifest: { ...manifest, modelLock: { ...manifest.modelLock, modelHash: "c".repeat(64) } },
+      project,
+      requiredViews: ["north", "south", "east", "west"],
+      exportOutputDir,
+      sourceProjectHashBefore: hashSourceProject(project)
+    })).blocking).toContainEqual({
+      code: "manifest_model_hash_mismatch",
+      message: "Export manifest model hash does not match the reviewed model lock."
+    });
     const artifactIdentities = manifest.artifactIdentities as Record<string, unknown>;
     expect(Object.values(artifactIdentities).every((identity: unknown) => {
       const value = identity as { sizeBytes: number; sha256: string; hashScope: string };
