@@ -282,6 +282,24 @@ describe("golden manifest integration", () => {
       strategies: ExportStrategies
     });
     expect(manifest.viewRegistry).toEqual(project.viewRegistry);
+    expect(manifest.lineExtraction).toEqual({
+      engine: "blender-freestyle",
+      cameraSource: "orthographic-view-registry",
+      geometrySource: "blender-scene-mesh",
+      svgRole: "layout-index-only",
+      pdfRole: "layout-only",
+      rendererTolerance: { metric: "pixel-difference-ratio", maximum: 0.005 }
+    });
+    const artifactIdentities = manifest.artifactIdentities as Record<string, unknown>;
+    expect(Object.values(artifactIdentities).every((identity: unknown) => {
+      const value = identity as { sizeBytes: number; sha256: string; hashScope: string };
+      return value.sizeBytes > 0 && /^[a-f0-9]{64}$/.test(value.sha256) && ["complete-file", "png-critical-chunks"].includes(value.hashScope);
+    })).toBe(true);
+    const svg = await readFile(path.join(outputDir, "run-a", "exports", template, manifest.artifacts.svg), "utf8");
+    expect(svg).toContain('"lineExtraction":"blender-freestyle"');
+    expect(svg).toContain('"geometryReconstruction":false');
+    expect(svg).toContain(`href="${manifest.artifacts.northPng}"`);
+    expect(svg).not.toContain("<line");
     expect(manifest.capabilityManifest.supportedTemplates).toContain("gothenburg-permit");
     expect(Object.keys(manifest.artifacts)).toEqual([
       "eastPng",

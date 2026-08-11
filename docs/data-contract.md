@@ -96,6 +96,15 @@ clipping range, and `MeasuredGeometry` target collection. Definitions are
 canonically ordered and bound by `registryHash`. Facade export requires all four
 cardinal views and rejects missing or changed registry data before Blender runs.
 
+Facade line extraction is performed only by Blender Freestyle from registry
+cameras. PNG files are the rendered line artifacts. The SVG is a layout-only
+index referencing those PNGs, and the PDF contains layout/metadata only; neither
+may project, reconstruct, or hide geometry. The export manifest records the
+strategy, a declared pixel-difference tolerance, and SHA-256 identity for every
+created artifact. PNG identity hashes only critical image chunks (`IHDR`,
+`PLTE`, `IDAT`, `IEND`) so Blender timestamp metadata cannot create false visual
+drift; other artifacts hash the complete file.
+
 Model-lock and export requests also carry the execution contract defined in
 `docs/namaka-alignment.md`. Successful results include deterministic
 intent/action evidence. This evidence records authorized scope, verification,

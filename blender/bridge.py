@@ -1,6 +1,8 @@
 import builtins
+import hashlib
 import json
 import math
+import struct
 import sys
 from pathlib import Path
 
@@ -397,13 +399,20 @@ def export_template(payload):
         "viewRegistry": options.get("viewRegistry"),
         "capabilityManifest": capability_manifest,
         "strategies": options.get("strategies", []),
+        "lineExtraction": {
+            "engine": "blender-freestyle",
+            "cameraSource": "orthographic-view-registry",
+            "geometrySource": "blender-scene-mesh",
+            "svgRole": "layout-index-only",
+            "pdfRole": "layout-only",
+            "rendererTolerance": {"metric": "pixel-difference-ratio", "maximum": 0.005},
+        },
         "options": options,
     }
-    (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     if template in ("permit", "permit-facade-pack", "swedish-municipality", "gothenburg-permit", "measured-visualization", "cad-simulated", "measurement-book", "qa-validation", "site-context", "photo-alignment"):
         write_template_pdf(output_dir / expected["pdf"], project, template, options)
-    if template in ("permit-facade-pack", "swedish-municipality", "gothenburg-permit", "measured-visualization", "cad-simulated", "fabrication"):
+    if template == "fabrication":
         write_cad_simulated_svg(output_dir / expected["svg"], project, template, options)
     if template in ("permit-facade-pack", "swedish-municipality", "gothenburg-permit", "measured-visualization"):
         write_measured_visualization_validation(output_dir / expected["validation"], project, options, normalization_report)
@@ -415,10 +424,15 @@ def export_template(payload):
             raise ValueError(f"Measured visualization validation failed: {validation_report['rejectIf']}")
         write_orthographic_png_preview(output_dir / expected["png"], project)
         write_multiview_orthographic_exports(output_dir, expected, project)
+    if template in ("permit-facade-pack", "swedish-municipality", "gothenburg-permit", "measured-visualization", "cad-simulated"):
+        write_blender_line_artifact_index(output_dir / expected["svg"], expected, project_id, template)
     if template in ("client-preview", "web-viewer", "archive"):
         bpy.ops.export_scene.gltf(filepath=str(output_dir / expected["glb"]), export_format="GLB")
     if template in ("fabrication", "archive"):
         bpy.ops.wm.obj_export(filepath=str(output_dir / expected["obj"]))
+
+    manifest["artifactIdentities"] = artifact_identities(output_dir, expected)
+    (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def validate_capability_manifest(template, options):
@@ -504,10 +518,6 @@ def template_artifacts(template, project_id):
 
 def write_template_pdf(pdf_path, project, template, options=None):
     options = options or {}
-    if template in ("permit-facade-pack", "swedish-municipality", "gothenburg-permit", "measured-visualization", "cad-simulated") and options.get("view") == "southwest":
-        write_southwest_cad_pdf(pdf_path, project, template, options)
-        return
-
     lines = [
         "%PDF-1.4",
         "% Blender MCP export template placeholder",
@@ -520,6 +530,53 @@ def write_template_pdf(pdf_path, project, template, options=None):
         "%%EOF",
     ]
     pdf_path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def write_blender_line_artifact_index(svg_path, expected, project_id, template):
+    view_keys = [key for key in ("facadePng", "planPng", "northPng", "southPng", "eastPng", "westPng", "sectionPng") if key in expected]
+    images = "\n".join(
+        f'  <image data-view="{key}" href="{expected[key]}" x="0" y="{index * 100}" width="100" height="100" preserveAspectRatio="xMidYMid meet"/>'
+        for index, key in enumerate(view_keys)
+    )
+    height = max(100, len(view_keys) * 100)
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 {height}">
+  <metadata>{{"projectId":"{project_id}","template":"{template}","lineExtraction":"blender-freestyle","role":"layout-index-only","geometryReconstruction":false}}</metadata>
+{images}
+</svg>
+'''
+    svg_path.write_text(svg, encoding="utf-8")
+
+
+def artifact_identities(output_dir, expected):
+    identities = {}
+    for key, relative_path in sorted(expected.items()):
+        artifact_path = output_dir / relative_path
+        if artifact_path.is_file():
+            content = artifact_path.read_bytes()
+            is_png = artifact_path.suffix.lower() == ".png"
+            identities[key] = {
+                "path": relative_path,
+                "sizeBytes": len(content),
+                "sha256": png_semantic_hash(content) if is_png else hashlib.sha256(content).hexdigest(),
+                "hashScope": "png-critical-chunks" if is_png else "complete-file",
+            }
+    return identities
+
+
+def png_semantic_hash(content):
+    if not content.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError("PNG artifact does not have a valid signature")
+    digest = hashlib.sha256()
+    offset = 8
+    while offset < len(content):
+        length = struct.unpack(">I", content[offset:offset + 4])[0]
+        chunk_type = content[offset + 4:offset + 8]
+        chunk_data = content[offset + 8:offset + 8 + length]
+        if chunk_type in (b"IHDR", b"PLTE", b"IDAT", b"IEND"):
+            digest.update(chunk_type)
+            digest.update(chunk_data)
+        offset += 12 + length
+    return digest.hexdigest()
 
 
 def write_pdf(pdf_path, width_pt, height_pt, commands):
