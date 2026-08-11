@@ -2,6 +2,7 @@ import builtins
 import hashlib
 import json
 import math
+import struct
 import sys
 from pathlib import Path
 
@@ -552,8 +553,30 @@ def artifact_identities(output_dir, expected):
         artifact_path = output_dir / relative_path
         if artifact_path.is_file():
             content = artifact_path.read_bytes()
-            identities[key] = {"path": relative_path, "sizeBytes": len(content), "sha256": hashlib.sha256(content).hexdigest()}
+            is_png = artifact_path.suffix.lower() == ".png"
+            identities[key] = {
+                "path": relative_path,
+                "sizeBytes": len(content),
+                "sha256": png_semantic_hash(content) if is_png else hashlib.sha256(content).hexdigest(),
+                "hashScope": "png-critical-chunks" if is_png else "complete-file",
+            }
     return identities
+
+
+def png_semantic_hash(content):
+    if not content.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError("PNG artifact does not have a valid signature")
+    digest = hashlib.sha256()
+    offset = 8
+    while offset < len(content):
+        length = struct.unpack(">I", content[offset:offset + 4])[0]
+        chunk_type = content[offset + 4:offset + 8]
+        chunk_data = content[offset + 8:offset + 8 + length]
+        if chunk_type in (b"IHDR", b"PLTE", b"IDAT", b"IEND"):
+            digest.update(chunk_type)
+            digest.update(chunk_data)
+        offset += 12 + length
+    return digest.hexdigest()
 
 
 def write_pdf(pdf_path, width_pt, height_pt, commands):

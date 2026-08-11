@@ -101,7 +101,9 @@ cameras. PNG files are the rendered line artifacts. The SVG is a layout-only
 index referencing those PNGs, and the PDF contains layout/metadata only; neither
 may project, reconstruct, or hide geometry. The export manifest records the
 strategy, a declared pixel-difference tolerance, and SHA-256 identity for every
-created artifact.
+created artifact. PNG identity hashes only critical image chunks (`IHDR`,
+`PLTE`, `IDAT`, `IEND`) so Blender timestamp metadata cannot create false visual
+drift; other artifacts hash the complete file.
 
 Model-lock and export requests also carry the execution contract defined in
 `docs/namaka-alignment.md`. Successful results include deterministic

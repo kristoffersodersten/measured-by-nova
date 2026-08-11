@@ -292,8 +292,8 @@ describe("golden manifest integration", () => {
     });
     const artifactIdentities = manifest.artifactIdentities as Record<string, unknown>;
     expect(Object.values(artifactIdentities).every((identity: unknown) => {
-      const value = identity as { sizeBytes: number; sha256: string };
-      return value.sizeBytes > 0 && /^[a-f0-9]{64}$/.test(value.sha256);
+      const value = identity as { sizeBytes: number; sha256: string; hashScope: string };
+      return value.sizeBytes > 0 && /^[a-f0-9]{64}$/.test(value.sha256) && ["complete-file", "png-critical-chunks"].includes(value.hashScope);
     })).toBe(true);
     const svg = await readFile(path.join(outputDir, "run-a", "exports", template, manifest.artifacts.svg), "utf8");
     expect(svg).toContain('"lineExtraction":"blender-freestyle"');
