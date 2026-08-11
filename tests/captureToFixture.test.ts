@@ -32,6 +32,8 @@ describe("real capture to fixture pipeline", () => {
     expect(result.project.projectId).toBe("real-carport-minimal");
     expect(result.project.photos).toHaveLength(4);
     expect(result.project.photos.every((photo) => photo.confidence === "low")).toBe(true);
+    expect(result.project.materialNotes).toHaveLength(2);
+    expect(result.project.steps).toContainEqual(expect.objectContaining({ id: "capture-step-1", confidence: "medium" }));
     expect(result.project.profiles[0]).toMatchObject({
       profile: "carport",
       confidence: "high",
@@ -86,6 +88,26 @@ describe("real capture to fixture pipeline", () => {
       id: "photo-west",
       code: "required_capture_missing",
       message: "Required capture field is missing."
+    });
+  });
+
+  it("blocks unverified foundation geometry before project creation", () => {
+    const capture = RealCarportCaptureSchema.parse(loadCapture());
+    const result = captureToFixture({
+      ...capture,
+      foundationHeights: {
+        ...capture.foundationHeights,
+        southwest: {
+          ...capture.foundationHeights?.southwest,
+          middle: { ...capture.foundationHeights?.southwest.middle, verified: false }
+        }
+      }
+    });
+    expect(result.ok).toBe(false);
+    expect(result.captureValidation.blocking).toContainEqual({
+      id: "foundation-southwest-middle",
+      code: "geometry_not_verified",
+      message: "Geometry-impacting capture fields must be verified before export."
     });
   });
 });

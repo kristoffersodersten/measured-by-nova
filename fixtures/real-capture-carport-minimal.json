@@ -12,8 +12,16 @@
     "roofSlopePercent": { "value": 3.7, "confidence": "high", "source": "permit_pdf", "verified": true }
   },
   "foundationHeights": {
-    "southwest": { "roadSideMm": 0, "middleMm": 685, "innerMm": 695 },
-    "northeast": { "outerTowardRoadMm": 530, "middleMm": 500, "innerMm": 630 }
+    "southwest": {
+      "roadSide": { "valueMm": 0, "confidence": "medium", "source": "manual_measurement", "verified": true },
+      "middle": { "valueMm": 685, "confidence": "medium", "source": "manual_measurement", "verified": true },
+      "inner": { "valueMm": 695, "confidence": "medium", "source": "manual_measurement", "verified": true }
+    },
+    "northeast": {
+      "outerTowardRoad": { "valueMm": 530, "confidence": "medium", "source": "manual_measurement", "verified": true },
+      "middle": { "valueMm": 500, "confidence": "medium", "source": "manual_measurement", "verified": true },
+      "inner": { "valueMm": 630, "confidence": "medium", "source": "manual_measurement", "verified": true }
+    }
   },
   "steps": [
     {
@@ -32,10 +40,14 @@
     "verified": true
   },
   "photos": [
-    { "path": "photos/north.jpg", "view": "north", "role": "reference", "verified": true },
-    { "path": "photos/south.jpg", "view": "south", "role": "reference", "verified": true },
-    { "path": "photos/east.jpg", "view": "east", "role": "reference", "verified": true },
-    { "path": "photos/west.jpg", "view": "west", "role": "reference", "verified": true }
+    { "path": "photos/north.jpg", "view": "north", "role": "reference", "confidence": "low", "verified": true },
+    { "path": "photos/south.jpg", "view": "south", "role": "reference", "confidence": "low", "verified": true },
+    { "path": "photos/east.jpg", "view": "east", "role": "reference", "confidence": "low", "verified": true },
+    { "path": "photos/west.jpg", "view": "west", "role": "reference", "confidence": "low", "verified": true }
+  ],
+  "materialNotes": [
+    { "facade": "all", "material": "white-painted-wood", "colorNote": "White painted horizontal cladding", "confidence": "medium", "source": "photo_reference", "verified": true },
+    { "facade": "all", "material": "dark-stone", "colorNote": "Dark foundation stone", "confidence": "medium", "source": "photo_reference", "verified": true }
   ],
   "assumptions": [
     {

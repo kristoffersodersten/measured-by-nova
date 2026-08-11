@@ -165,6 +165,26 @@ function makeToolHarness(outputDir: string): Map<string, RegisteredTool> {
 }
 
 describe("measurement MCP digital viewing tools", () => {
+  it("keeps a real capture fixture export-blocked until human model review lock", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
+    const tools = makeToolHarness(outputDir);
+    const capture = JSON.parse(readFileSync("fixtures/real-capture-carport-minimal.json", "utf8")) as unknown;
+    const created = await tools.get("create_project_from_capture")!.handler(capture);
+    expect(created.isError).toBe(false);
+
+    const exported = await tools.get("export_facade_completion_pack")!.handler({
+      projectId: "real-carport-minimal",
+      executionIntent: executionIntent("export-facade-pack", ["project-state", "blender-output", "manifest"])
+    });
+    const body = JSON.parse(exported.content[0].text) as { error?: { code: string; details?: { blocking?: Array<{ code: string }> } } };
+    expect(exported.isError).toBe(true);
+    expect(body.error?.code).toBe("model_not_locked");
+    expect(body.error?.details?.blocking).toContainEqual({
+      code: "model_not_locked",
+      message: "Human-reviewed model lock is required before permit-support export."
+    });
+  });
+
   it("blocks facade export before Blender when a required registry view is missing", async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
     const projectDir = path.join(outputDir, "measurement-projects", "view-fixture");

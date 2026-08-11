@@ -153,8 +153,14 @@ The minimal real capture pipeline accepts a strict `carport` capture set and con
 
 Rules:
 
-- Geometry-impacting values must be `verified=true`.
-- Facade photos are required for `north`, `south`, `east`, and `west`, but remain non-authoritative `low` confidence references.
+- Geometry-impacting values, including every supplied foundation level, step run,
+  and neighbor-boundary distance, must be `verified=true`.
+- Facade photos are required for `north`, `south`, `east`, and `west`; their
+  declared confidence is preserved while their role remains non-authoritative.
+- At least one material/color note is required. Its facade, confidence,
+  provenance, verification state, and optional color note are preserved in the
+  project fixture without making it geometry authority.
+- Step confidence and assumptions are preserved in the project fixture.
 - The converter must not infer missing geometry.
 - The created project remains unlocked; a human review must still run before permit-support export.
 

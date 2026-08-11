@@ -25,6 +25,16 @@ export const PhotoReferenceSchema = z.object({
 }).strict();
 export type PhotoReference = z.infer<typeof PhotoReferenceSchema>;
 
+export const MaterialNoteSchema = z.object({
+  facade: z.enum(["north", "south", "east", "west", "all"]),
+  material: z.string().min(1).max(120),
+  colorNote: z.string().min(1).max(160).optional(),
+  confidence: ConfidenceSchema,
+  source: z.enum(["manual_measurement", "photo_reference", "user_declared"]),
+  verified: z.boolean()
+}).strict();
+export type MaterialNote = z.infer<typeof MaterialNoteSchema>;
+
 export const KnownDimensionSchema = z.object({
   label: z.string().min(1).max(120),
   valueMm: PositiveMmSchema,
@@ -163,6 +173,7 @@ export const MeasurementProjectSchema = z.object({
   projectId: IdSchema,
   unit: z.literal("mm"),
   photos: z.array(PhotoReferenceSchema).default([]),
+  materialNotes: z.array(MaterialNoteSchema).default([]),
   dimensions: z.array(KnownDimensionSchema).default([]),
   planes: z.array(ReferencePlaneSchema).default([]),
   elements: z.array(ParametricElementSchema).default([]),

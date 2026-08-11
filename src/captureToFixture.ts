@@ -3,6 +3,7 @@ import { CaptureContractSchema, validateCaptureContract, type CaptureValidationR
 import {
   AssumptionSchema,
   ConfidenceSchema,
+  MaterialNoteSchema,
   MeasurementProjectSchema,
   PhotoReferenceSchema,
   type MeasurementProject
@@ -11,20 +12,21 @@ import { materializeProfiles } from "./profileGenerator.js";
 
 const IdSchema = z.string().min(1).max(80).regex(/^[a-zA-Z0-9_.-]+$/);
 const PositiveMmSchema = z.number().finite().positive();
-const MmSchema = z.number().finite();
+const MmSchema = z.number().finite().nonnegative();
 const VerifiedMeasurementSchema = z.object({
   valueMm: PositiveMmSchema,
   confidence: z.enum(["high", "medium"]),
   source: z.enum(["permit_pdf", "manual_measurement"]),
   verified: z.boolean()
 }).strict();
+const VerifiedMmSchema = VerifiedMeasurementSchema.extend({ valueMm: MmSchema }).strict();
 const VerifiedNumberSchema = z.object({
   value: z.number().finite(),
   confidence: z.enum(["high", "medium"]),
   source: z.enum(["permit_pdf", "manual_measurement"]),
   verified: z.boolean()
 }).strict();
-const VerifiedPhotoSchema = PhotoReferenceSchema.omit({ confidence: true }).extend({
+const VerifiedPhotoSchema = PhotoReferenceSchema.extend({
   view: z.enum(["north", "south", "east", "west"]),
   verified: z.boolean()
 }).strict();
@@ -43,8 +45,8 @@ export const RealCarportCaptureSchema = z.object({
     roofSlopePercent: VerifiedNumberSchema
   }).strict(),
   foundationHeights: z.object({
-    southwest: z.object({ roadSideMm: MmSchema, middleMm: MmSchema, innerMm: MmSchema }).strict(),
-    northeast: z.object({ outerTowardRoadMm: MmSchema, middleMm: MmSchema, innerMm: MmSchema }).strict()
+    southwest: z.object({ roadSide: VerifiedMmSchema, middle: VerifiedMmSchema, inner: VerifiedMmSchema }).strict(),
+    northeast: z.object({ outerTowardRoad: VerifiedMmSchema, middle: VerifiedMmSchema, inner: VerifiedMmSchema }).strict()
   }).strict().optional(),
   steps: z.array(z.object({
     stepDepthMm: PositiveMmSchema,
@@ -61,6 +63,7 @@ export const RealCarportCaptureSchema = z.object({
     verified: z.boolean()
   }).strict().optional(),
   photos: z.array(VerifiedPhotoSchema).min(1),
+  materialNotes: z.array(MaterialNoteSchema).min(1),
   assumptions: z.array(AssumptionSchema).default([])
 }).strict();
 export type RealCarportCapture = z.infer<typeof RealCarportCaptureSchema>;
@@ -84,8 +87,9 @@ export function captureToFixture(input: unknown): CaptureToFixtureResult {
       path: photo.path,
       view: photo.view,
       role: photo.role,
-      confidence: "low"
+      confidence: photo.confidence
     })),
+    materialNotes: capture.materialNotes,
     dimensions: [
       dimension("width", capture.dimensions.width),
       dimension("depth", capture.dimensions.depth),
@@ -93,6 +97,14 @@ export function captureToFixture(input: unknown): CaptureToFixtureResult {
       dimension("east-low-side-height", capture.dimensions.eastLowSideHeight)
     ],
     assumptions: capture.assumptions,
+    steps: capture.steps.map((step, index) => ({
+      id: `capture-step-${index + 1}`,
+      stepDepthMm: step.stepDepthMm,
+      stepHeightMm: step.stepHeightMm,
+      count: step.count,
+      locationHint: step.locationHint,
+      confidence: step.confidence
+    })),
     profiles: [{
       id: "profile-carport",
       profile: "carport",
@@ -109,7 +121,18 @@ export function captureToFixture(input: unknown): CaptureToFixtureResult {
         roofSlopePercent: capture.dimensions.roofSlopePercent.value,
         westHighSideHeightMm: capture.dimensions.westHighSideHeight.valueMm,
         eastLowSideHeightMm: capture.dimensions.eastLowSideHeight.valueMm,
-        foundationHeights: capture.foundationHeights,
+        foundationHeights: capture.foundationHeights ? {
+          southwest: {
+            roadSideMm: capture.foundationHeights.southwest.roadSide.valueMm,
+            middleMm: capture.foundationHeights.southwest.middle.valueMm,
+            innerMm: capture.foundationHeights.southwest.inner.valueMm
+          },
+          northeast: {
+            outerTowardRoadMm: capture.foundationHeights.northeast.outerTowardRoad.valueMm,
+            middleMm: capture.foundationHeights.northeast.middle.valueMm,
+            innerMm: capture.foundationHeights.northeast.inner.valueMm
+          }
+        } : undefined,
         steps: capture.steps.map((step) => ({
           stepDepthMm: step.stepDepthMm,
           stepHeightMm: step.stepHeightMm,
@@ -150,7 +173,16 @@ function buildCaptureContract(capture: RealCarportCapture) {
       requirement(`photo-${view}`, `${view} facade reference photo`, "perception", photoViews.get(view) === true)
     ),
     ...capture.steps.map((step, index) => requirement(`step-run-${index + 1}`, `Step run ${index + 1}`, "geometry", step.verified)),
-    ...(capture.neighborBoundary ? [requirement("neighbor-boundary", "Neighbor boundary distance", "geometry", capture.neighborBoundary.verified)] : [])
+    ...(capture.foundationHeights ? [
+      requirement("foundation-southwest-road-side", "Southwest foundation road-side height", "geometry", capture.foundationHeights.southwest.roadSide.verified),
+      requirement("foundation-southwest-middle", "Southwest foundation middle height", "geometry", capture.foundationHeights.southwest.middle.verified),
+      requirement("foundation-southwest-inner", "Southwest foundation inner height", "geometry", capture.foundationHeights.southwest.inner.verified),
+      requirement("foundation-northeast-outer", "Northeast foundation outer height", "geometry", capture.foundationHeights.northeast.outerTowardRoad.verified),
+      requirement("foundation-northeast-middle", "Northeast foundation middle height", "geometry", capture.foundationHeights.northeast.middle.verified),
+      requirement("foundation-northeast-inner", "Northeast foundation inner height", "geometry", capture.foundationHeights.northeast.inner.verified)
+    ] : []),
+    ...(capture.neighborBoundary ? [requirement("neighbor-boundary", "Neighbor boundary distance", "geometry", capture.neighborBoundary.verified)] : []),
+    ...capture.materialNotes.map((note, index) => requirement(`material-note-${index + 1}`, `Material note ${index + 1}`, "perception", note.verified))
   ];
 
   return CaptureContractSchema.parse({
