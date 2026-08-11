@@ -35,9 +35,11 @@ const ManifestSchema = z.object({
     exports: z.literal("formatting-only-no-geometry-reconstruction")
   }).strict(),
   materialEvidence: z.array(z.object({
-    facade: z.string(),
+    facade: z.string().optional(),
+    elementId: z.string().optional(),
     material: z.string(),
     colorNote: z.string(),
+    colorReference: z.object({ standard: z.string(), code: z.string(), label: z.string().optional() }).strict().optional(),
     confidence: z.enum(["high", "medium", "low"]),
     source: z.string(),
     verified: z.boolean()
@@ -255,7 +257,7 @@ describe("golden manifest integration", () => {
     const project = {
       ...materializedProject,
       materialNotes: [
-        { facade: "all" as const, material: "white-painted-wood", colorNote: "White painted horizontal cladding", confidence: "medium" as const, source: "photo_reference" as const, verified: true },
+        { facade: "all" as const, material: "white-painted-wood", colorNote: "White painted horizontal cladding", colorReference: { standard: "NCS" as const, code: "S 0502-Y" }, pbrPreview: { previewOnly: true as const, geometryAuthority: false as const, baseColor: "#f4f2e8", roughness: 0.48 }, confidence: "medium" as const, source: "photo_reference" as const, verified: true },
         { facade: "all" as const, material: "dark-stone", colorNote: "Dark foundation stone", confidence: "medium" as const, source: "photo_reference" as const, verified: true },
         { facade: "all" as const, material: "dark-roof", colorNote: "Dark roof and fascia", confidence: "medium" as const, source: "photo_reference" as const, verified: true },
         { facade: "all" as const, material: "driveable-gravel-floor", colorNote: "Driveable gravel context surface", confidence: "low" as const, source: "photo_reference" as const, verified: true }
@@ -351,7 +353,7 @@ describe("golden manifest integration", () => {
     expect(manifest.layout.includedViews.every((view: { sha256: string }) => /^[a-f0-9]{64}$/.test(view.sha256))).toBe(true);
     expect(manifest.layout.measurements).toHaveLength(4);
     expect(manifest.layout.assumptions).toHaveLength(1);
-    expect(manifest.layout.materialColorNotes).toContain("Observed/model metadata: white-painted-wood");
+    expect(manifest.layout.materialColorNotes).toContain("all: white-painted-wood [NCS S 0502-Y]: White painted horizontal cladding (medium, photo_reference)");
     expect(manifest.materialEvidence.map((item: { material: string }) => item.material).sort()).toEqual([
       "dark-roof",
       "dark-stone",
@@ -361,6 +363,7 @@ describe("golden manifest integration", () => {
     expect(manifest.materialEvidence.every((item: { source: string; confidence: string; verified: boolean }) =>
       item.source === "photo_reference" && ["low", "medium"].includes(item.confidence) && item.verified
     )).toBe(true);
+    expect(manifest.materialEvidence.every((item: Record<string, unknown>) => !("pbrPreview" in item))).toBe(true);
     const exportOutputDir = path.join(outputDir, "run-a", "exports", template);
     const facadeQa = await evaluateFacadeQaManifest({
       manifest,

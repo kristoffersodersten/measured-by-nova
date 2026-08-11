@@ -61,7 +61,7 @@
     { "path": "photos/west.jpg", "view": "west", "role": "reference", "confidence": "low", "verified": true }
   ],
   "materialNotes": [
-    { "facade": "all", "material": "white-painted-wood", "colorNote": "White painted horizontal cladding", "confidence": "medium", "source": "photo_reference", "verified": true },
+    { "facade": "all", "material": "white-painted-wood", "colorNote": "White painted horizontal cladding", "colorReference": { "standard": "NCS", "code": "S 0502-Y" }, "pbrPreview": { "previewOnly": true, "geometryAuthority": false, "baseColor": "#f4f2e8", "roughness": 0.48, "metallic": 0, "textureScaleMm": 900 }, "confidence": "medium", "source": "photo_reference", "verified": true },
     { "facade": "all", "material": "dark-stone", "colorNote": "Dark foundation stone", "confidence": "medium", "source": "photo_reference", "verified": true },
     { "facade": "all", "material": "dark-roof", "colorNote": "Dark roof and fascia", "confidence": "medium", "source": "photo_reference", "verified": true },
     { "facade": "all", "material": "driveable-gravel-floor", "colorNote": "Driveable gravel context surface", "confidence": "low", "source": "photo_reference", "verified": true }

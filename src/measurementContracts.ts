@@ -25,14 +25,38 @@ export const PhotoReferenceSchema = z.object({
 }).strict();
 export type PhotoReference = z.infer<typeof PhotoReferenceSchema>;
 
+export const MaterialColorReferenceSchema = z.object({
+  standard: z.enum(["NCS", "RAL", "manufacturer", "custom"]),
+  code: z.string().min(1).max(80),
+  label: z.string().min(1).max(160).optional()
+}).strict();
+export type MaterialColorReference = z.infer<typeof MaterialColorReferenceSchema>;
+
+export const MaterialPbrPreviewSchema = z.object({
+  previewOnly: z.literal(true),
+  geometryAuthority: z.literal(false),
+  baseColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  roughness: z.number().finite().min(0).max(1).optional(),
+  metallic: z.number().finite().min(0).max(1).optional(),
+  textureScaleMm: z.number().finite().positive().optional()
+}).strict();
+export type MaterialPbrPreview = z.infer<typeof MaterialPbrPreviewSchema>;
+
+export const MaterialSourceSchema = z.enum(["manual_measurement", "photo_reference", "user_declared"]);
+
 export const MaterialNoteSchema = z.object({
-  facade: z.enum(["north", "south", "east", "west", "all"]),
+  facade: z.enum(["north", "south", "east", "west", "all"]).optional(),
+  elementId: IdSchema.optional(),
   material: z.string().min(1).max(120),
   colorNote: z.string().min(1).max(160).optional(),
+  colorReference: MaterialColorReferenceSchema.optional(),
+  pbrPreview: MaterialPbrPreviewSchema.optional(),
   confidence: ConfidenceSchema,
-  source: z.enum(["manual_measurement", "photo_reference", "user_declared"]),
+  source: MaterialSourceSchema,
   verified: z.boolean()
-}).strict();
+}).strict().refine((value) => value.facade !== undefined || value.elementId !== undefined, {
+  message: "Material metadata must target a facade or element."
+});
 export type MaterialNote = z.infer<typeof MaterialNoteSchema>;
 
 export const FacadeLevelSchema = z.object({
