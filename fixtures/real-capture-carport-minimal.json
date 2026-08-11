@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "captureId": "real-carport-minimal",
   "projectId": "real-carport-minimal",
   "projectType": "carport",
@@ -23,12 +23,27 @@
       "inner": { "valueMm": 630, "confidence": "medium", "source": "manual_measurement", "verified": true }
     }
   },
+  "facadeLevels": [
+    { "facade": "north", "baseLevel": { "valueMm": 0, "confidence": "high", "source": "permit_pdf", "verified": true }, "topLevel": { "valueMm": 3174, "confidence": "high", "source": "permit_pdf", "verified": true } },
+    { "facade": "south", "baseLevel": { "valueMm": 0, "confidence": "high", "source": "permit_pdf", "verified": true }, "topLevel": { "valueMm": 3455, "confidence": "high", "source": "permit_pdf", "verified": true } },
+    { "facade": "east", "baseLevel": { "valueMm": 0, "confidence": "high", "source": "permit_pdf", "verified": true }, "topLevel": { "valueMm": 3174, "confidence": "high", "source": "permit_pdf", "verified": true } },
+    { "facade": "west", "baseLevel": { "valueMm": 0, "confidence": "high", "source": "permit_pdf", "verified": true }, "topLevel": { "valueMm": 3455, "confidence": "high", "source": "permit_pdf", "verified": true } }
+  ],
+  "openings": [
+    { "id": "south-drive-in", "hostElementId": "south-facade", "facade": "south", "boundsMm": { "x": 2900, "y": 0, "z": 0, "width": 1700, "height": 2200 }, "openType": "open", "confidence": "high", "source": "manual_measurement", "verified": true }
+  ],
+  "members": [
+    { "id": "measured-southwest-post", "memberType": "post", "role": "structural", "boundsMm": { "x": 0, "y": 0, "z": 0, "width": 145, "depth": 145, "height": 3455 }, "confidence": "high", "source": "manual_measurement", "verified": true },
+    { "id": "measured-south-bar", "memberType": "bar", "role": "decorative", "boundsMm": { "x": 145, "y": 0, "z": 900, "width": 7531, "depth": 70, "height": 70 }, "confidence": "medium", "source": "manual_measurement", "verified": true }
+  ],
   "steps": [
     {
       "stepDepthMm": 295,
       "stepHeightMm": 140,
       "count": 3,
       "locationHint": "entrance/platform",
+      "facade": "south",
+      "direction": "south",
       "confidence": "medium",
       "verified": true
     }

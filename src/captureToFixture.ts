@@ -3,6 +3,7 @@ import { CaptureContractSchema, validateCaptureContract, type CaptureValidationR
 import {
   AssumptionSchema,
   ConfidenceSchema,
+  FacadeLevelSchema,
   MaterialNoteSchema,
   MeasurementProjectSchema,
   PhotoReferenceSchema,
@@ -20,6 +21,7 @@ const VerifiedMeasurementSchema = z.object({
   verified: z.boolean()
 }).strict();
 const VerifiedMmSchema = VerifiedMeasurementSchema.extend({ valueMm: MmSchema }).strict();
+const VerifiedSignedMmSchema = VerifiedMeasurementSchema.extend({ valueMm: z.number().finite() }).strict();
 const VerifiedNumberSchema = z.object({
   value: z.number().finite(),
   confidence: z.enum(["high", "medium"]),
@@ -32,7 +34,7 @@ const VerifiedPhotoSchema = PhotoReferenceSchema.extend({
 }).strict();
 
 export const RealCarportCaptureSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   captureId: IdSchema,
   projectId: IdSchema,
   projectType: z.literal("carport"),
@@ -48,11 +50,37 @@ export const RealCarportCaptureSchema = z.object({
     southwest: z.object({ roadSide: VerifiedMmSchema, middle: VerifiedMmSchema, inner: VerifiedMmSchema }).strict(),
     northeast: z.object({ outerTowardRoad: VerifiedMmSchema, middle: VerifiedMmSchema, inner: VerifiedMmSchema }).strict()
   }).strict().optional(),
+  facadeLevels: z.array(z.object({
+    facade: z.enum(["north", "south", "east", "west"]),
+    baseLevel: VerifiedSignedMmSchema,
+    topLevel: VerifiedSignedMmSchema
+  }).strict()).max(4).default([]),
+  openings: z.array(z.object({
+    id: IdSchema,
+    hostElementId: IdSchema,
+    facade: z.enum(["north", "south", "east", "west"]),
+    boundsMm: z.object({ x: z.number().finite(), y: z.number().finite(), z: z.number().finite(), width: PositiveMmSchema, height: PositiveMmSchema }).strict(),
+    openType: z.enum(["open", "door", "window"]),
+    confidence: z.enum(["high", "medium"]),
+    source: z.enum(["permit_pdf", "manual_measurement"]),
+    verified: z.boolean()
+  }).strict()).default([]),
+  members: z.array(z.object({
+    id: IdSchema,
+    memberType: z.enum(["post", "bar"]),
+    role: z.enum(["structural", "decorative"]),
+    boundsMm: z.object({ x: z.number().finite(), y: z.number().finite(), z: z.number().finite(), width: PositiveMmSchema, depth: PositiveMmSchema, height: PositiveMmSchema }).strict(),
+    confidence: z.enum(["high", "medium"]),
+    source: z.enum(["permit_pdf", "manual_measurement"]),
+    verified: z.boolean()
+  }).strict()).default([]),
   steps: z.array(z.object({
     stepDepthMm: PositiveMmSchema,
     stepHeightMm: PositiveMmSchema,
     count: z.number().int().positive().max(100),
     locationHint: z.string().min(1).max(160).optional(),
+    facade: z.enum(["north", "south", "east", "west"]),
+    direction: z.enum(["north", "south", "east", "west", "up", "down"]),
     confidence: ConfidenceSchema,
     verified: z.boolean()
   }).strict()).default([]),
@@ -90,6 +118,13 @@ export function captureToFixture(input: unknown): CaptureToFixtureResult {
       confidence: photo.confidence
     })),
     materialNotes: capture.materialNotes,
+    facadeLevels: capture.facadeLevels.map((level) => FacadeLevelSchema.parse({
+      facade: level.facade,
+      baseLevelMm: level.baseLevel.valueMm,
+      topLevelMm: level.topLevel.valueMm,
+      confidence: minConfidence([level.baseLevel.confidence, level.topLevel.confidence]),
+      source: level.baseLevel.source
+    })),
     dimensions: [
       dimension("width", capture.dimensions.width),
       dimension("depth", capture.dimensions.depth),
@@ -97,12 +132,28 @@ export function captureToFixture(input: unknown): CaptureToFixtureResult {
       dimension("east-low-side-height", capture.dimensions.eastLowSideHeight)
     ],
     assumptions: capture.assumptions,
+    openings: capture.openings.map((opening) => ({
+      hostElementId: opening.hostElementId,
+      boundsMm: opening.boundsMm,
+      openType: opening.openType,
+      confidence: opening.confidence
+    })),
+    elements: capture.members.map((member) => ({
+      id: member.id,
+      kind: member.memberType === "post" ? "post" : "beam",
+      boundsMm: member.boundsMm,
+      confidence: member.confidence,
+      source: member.source === "manual_measurement" ? "manual" : "dimension",
+      metadata: { captureContractV2: true, memberType: member.memberType, role: member.role }
+    })),
     steps: capture.steps.map((step, index) => ({
       id: `capture-step-${index + 1}`,
       stepDepthMm: step.stepDepthMm,
       stepHeightMm: step.stepHeightMm,
       count: step.count,
       locationHint: step.locationHint,
+      facade: step.facade,
+      direction: step.direction,
       confidence: step.confidence
     })),
     profiles: [{
@@ -163,12 +214,23 @@ export function captureToFixture(input: unknown): CaptureToFixtureResult {
 
 function buildCaptureContract(capture: RealCarportCapture) {
   const photoViews = new Map(capture.photos.map((photo) => [photo.view, photo.verified]));
+  const facadeLevels = new Map(capture.facadeLevels.map((level) => [level.facade, level]));
   const requirements = [
     requirement("width", "Overall width", "geometry", capture.dimensions.width.verified),
     requirement("depth", "Overall depth", "geometry", capture.dimensions.depth.verified),
     requirement("west-high-side-height", "West/high side height", "geometry", capture.dimensions.westHighSideHeight.verified),
     requirement("east-low-side-height", "East/low side height", "geometry", capture.dimensions.eastLowSideHeight.verified),
     requirement("roof-slope-percent", "Roof slope", "geometry", capture.dimensions.roofSlopePercent.verified),
+    ...(["north", "south", "east", "west"] as const).flatMap((facade) => [
+      requirement(`facade-${facade}-base-level`, `${facade} facade base level`, "geometry", facadeLevels.get(facade)?.baseLevel.verified === true),
+      requirement(`facade-${facade}-top-level`, `${facade} facade top level`, "geometry", facadeLevels.get(facade)?.topLevel.verified === true)
+    ]),
+    ...(capture.openings.length === 0
+      ? [requirement("openings", "Measured facade openings", "geometry", false)]
+      : capture.openings.map((opening) => requirement(`opening-${opening.id}`, `Measured opening ${opening.id}`, "geometry", opening.verified))),
+    ...(capture.members.length === 0
+      ? [requirement("members", "Measured posts and bars", "geometry", false)]
+      : capture.members.map((member) => requirement(`member-${member.id}`, `${member.role} ${member.memberType} ${member.id}`, "geometry", member.verified))),
     ...(["north", "south", "east", "west"] as const).map((view) =>
       requirement(`photo-${view}`, `${view} facade reference photo`, "perception", photoViews.get(view) === true)
     ),

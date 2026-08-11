@@ -149,7 +149,9 @@ Validation failures must be machine-readable:
 
 ## Real Capture To Fixture
 
-The minimal real capture pipeline accepts a strict `carport` capture set and converts it into the same `MeasurementProject` contract used by synthetic fixtures.
+The real capture pipeline accepts the strict version-2 `carport` capture set and
+converts it into the same `MeasurementProject` contract used by synthetic
+fixtures.
 
 Rules:
 
@@ -161,6 +163,12 @@ Rules:
   provenance, verification state, and optional color note are preserved in the
   project fixture without making it geometry authority.
 - Step confidence and assumptions are preserved in the project fixture.
+- North/south/east/west base and top levels are explicit measured fields.
+- Openings carry measured bounds, host, facade, type, provenance, confidence,
+  and verification state.
+- Posts and bars carry measured bounds plus an explicit
+  `structural`/`decorative` role; directional step runs carry facade and
+  direction.
 - The converter must not infer missing geometry.
 - The created project remains unlocked; a human review must still run before permit-support export.
 

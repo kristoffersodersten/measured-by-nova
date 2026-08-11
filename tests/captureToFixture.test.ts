@@ -33,7 +33,19 @@ describe("real capture to fixture pipeline", () => {
     expect(result.project.photos).toHaveLength(4);
     expect(result.project.photos.every((photo) => photo.confidence === "low")).toBe(true);
     expect(result.project.materialNotes).toHaveLength(2);
-    expect(result.project.steps).toContainEqual(expect.objectContaining({ id: "capture-step-1", confidence: "medium" }));
+    expect(result.project.facadeLevels.map((level) => level.facade)).toEqual(["north", "south", "east", "west"]);
+    expect(result.project.openings).toContainEqual(expect.objectContaining({ hostElementId: "south-facade", openType: "open", confidence: "high" }));
+    expect(result.project.elements).toContainEqual(expect.objectContaining({
+      id: "measured-southwest-post",
+      kind: "post",
+      metadata: { captureContractV2: true, memberType: "post", role: "structural" }
+    }));
+    expect(result.project.elements).toContainEqual(expect.objectContaining({
+      id: "measured-south-bar",
+      kind: "beam",
+      metadata: { captureContractV2: true, memberType: "bar", role: "decorative" }
+    }));
+    expect(result.project.steps).toContainEqual(expect.objectContaining({ id: "capture-step-1", confidence: "medium", facade: "south", direction: "south" }));
     expect(result.project.profiles[0]).toMatchObject({
       profile: "carport",
       confidence: "high",
@@ -56,6 +68,21 @@ describe("real capture to fixture pipeline", () => {
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
     expect(stableJson(second)).toBe(stableJson(first));
+  });
+
+  it("keeps photo evidence secondary and unable to alter measured geometry", () => {
+    const capture = RealCarportCaptureSchema.parse(loadCapture());
+    const first = captureToFixture(capture);
+    const second = captureToFixture({
+      ...capture,
+      photos: capture.photos.map((photo) => ({ ...photo, path: `alternate/${photo.view}.jpg`, confidence: "medium" as const }))
+    });
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (!first.ok || !second.ok) throw new Error("Expected verified captures to convert.");
+    expect(stableJson(second.project.elements)).toBe(stableJson(first.project.elements));
+    expect(stableJson(second.project.openings)).toBe(stableJson(first.project.openings));
+    expect(second.project.photos.map((photo) => photo.path)).not.toEqual(first.project.photos.map((photo) => photo.path));
   });
 
   it("blocks unverified geometry before project creation", () => {
@@ -108,6 +135,40 @@ describe("real capture to fixture pipeline", () => {
       id: "foundation-southwest-middle",
       code: "geometry_not_verified",
       message: "Geometry-impacting capture fields must be verified before export."
+    });
+  });
+
+  it.each([
+    ["opening-south-drive-in", (capture: ReturnType<typeof RealCarportCaptureSchema.parse>) => ({
+      ...capture,
+      openings: capture.openings.map((opening) => ({ ...opening, verified: false }))
+    })],
+    ["member-measured-southwest-post", (capture: ReturnType<typeof RealCarportCaptureSchema.parse>) => ({
+      ...capture,
+      members: capture.members.map((member) => member.memberType === "post" ? { ...member, verified: false } : member)
+    })],
+    ["facade-west-top-level", (capture: ReturnType<typeof RealCarportCaptureSchema.parse>) => ({
+      ...capture,
+      facadeLevels: capture.facadeLevels.map((level) => level.facade === "west" ? { ...level, topLevel: { ...level.topLevel, verified: false } } : level)
+    })]
+  ])("blocks unverified capture v2 geometry %s", (id, mutate) => {
+    const result = captureToFixture(mutate(RealCarportCaptureSchema.parse(loadCapture())));
+    expect(result.ok).toBe(false);
+    expect(result.captureValidation.blocking).toContainEqual({
+      id,
+      code: "geometry_not_verified",
+      message: "Geometry-impacting capture fields must be verified before export."
+    });
+  });
+
+  it("reports missing opening geometry as a UI-ready blocker", () => {
+    const capture = RealCarportCaptureSchema.parse(loadCapture());
+    const result = captureToFixture({ ...capture, openings: [] });
+    expect(result.ok).toBe(false);
+    expect(result.captureValidation.blocking).toContainEqual({
+      id: "openings",
+      code: "required_capture_missing",
+      message: "Required capture field is missing."
     });
   });
 });
