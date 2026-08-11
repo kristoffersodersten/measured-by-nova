@@ -42,6 +42,7 @@ import {
   ValidateDigitalViewingCapturePresetInputSchema
 } from "./digitalViewingContracts.js";
 import { materializeProfiles } from "./profileGenerator.js";
+import { buildModelLock, validateModelLock } from "./modelLock.js";
 import { appendRequestLog, fail, ok, readProject, requestId, writeProject } from "./projectStore.js";
 import {
   CarportProfileParametersSchema,
@@ -233,7 +234,13 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     if (!gate.ok) {
       return fail(req, "quality_gate_failed", "Model cannot be locked until quality gates pass.", formatReasons(gate), { blocking: gate.blocking });
     }
-    const next = { ...project, modelLock: { locked: true, lockedAt: new Date().toISOString(), lockedBy: payload.lockedBy, reason: payload.reason } };
+    let modelLock;
+    try {
+      modelLock = await buildModelLock(config, project, { lockedAt: new Date().toISOString(), lockedBy: payload.lockedBy, reason: payload.reason });
+    } catch (error) {
+      return fail(req, "model_artifact_missing", error instanceof Error ? error.message : String(error));
+    }
+    const next = { ...project, modelLock };
     await writeProject(config, next);
     await appendRequestLog(config, payload.projectId, req, "lock_model_for_export", payload);
     const executionAction = buildExecutionActionEvidence(payload.executionIntent, {
@@ -298,6 +305,10 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     const capability = evaluateCapabilityExecution(DefaultCapabilityManifest, { template: payload.template, strategies: PermitExportStrategies });
     if (!project.modelLock.locked) {
       return fail(req, "model_not_locked", "Run lock_model_for_export after human review before exporting a facade-completion package.", formatReasons(gate), { blocking: [{ code: "model_not_locked", message: "Human-reviewed model lock is required before permit-support export." }] });
+    }
+    const lockValidation = await validateModelLock(config, project);
+    if (!lockValidation.ok) {
+      return fail(req, "model_lock_invalid", "Reviewed model lock no longer matches project and Blender state.", lockValidation.blocking.map((reason) => `${reason.code}: ${reason.message}`), { blocking: lockValidation.blocking });
     }
     if (!gate.ok) {
       return fail(req, "quality_gate_failed", "Facade-completion export requires all quality gates to pass.", formatReasons(gate), { blocking: gate.blocking });

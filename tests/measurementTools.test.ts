@@ -204,6 +204,8 @@ describe("measurement MCP digital viewing tools", () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
     const projectDir = path.join(outputDir, "measurement-projects", "lock-fixture");
     await mkdir(projectDir, { recursive: true });
+    await mkdir(path.join(projectDir, "artifacts"), { recursive: true });
+    await writeFile(path.join(projectDir, "artifacts", "lock-fixture.blend"), "reviewed blender bytes");
     await writeFile(path.join(projectDir, "project.json"), JSON.stringify({
       schemaVersion: 1,
       projectId: "lock-fixture",
@@ -222,7 +224,8 @@ describe("measurement MCP digital viewing tools", () => {
           steps: [],
           claddingDirection: "horizontal"
         }
-      }]
+      }],
+      artifacts: { blend: "measurement-projects/lock-fixture/artifacts/lock-fixture.blend" }
     }), "utf8");
     const tool = makeToolHarness(outputDir).get("lock_model_for_export");
 
@@ -233,10 +236,13 @@ describe("measurement MCP digital viewing tools", () => {
       reason: "Reviewed measured geometry"
     });
     const body = JSON.parse(result.content[0].text) as {
-      data?: { execution?: { intent: { intentId: string }; action: { intentHash: string; manifestHash: string; changedArtifacts: string[]; executionPolicy: unknown } } };
+      data?: { modelLock?: { modelHash: string; sourceProjectHash: string; modelArtifact: string }; execution?: { intent: { intentId: string }; action: { intentHash: string; manifestHash: string; changedArtifacts: string[]; executionPolicy: unknown } } };
     };
 
     expect(result.isError).toBe(false);
+    expect(body.data?.modelLock?.modelHash).toHaveLength(64);
+    expect(body.data?.modelLock?.sourceProjectHash).toHaveLength(64);
+    expect(body.data?.modelLock?.modelArtifact).toBe("measurement-projects/lock-fixture/artifacts/lock-fixture.blend");
     expect(body.data?.execution?.intent.intentId).toBe("intent-lock-model");
     expect(body.data?.execution?.action.intentHash).toHaveLength(64);
     expect(body.data?.execution?.action.manifestHash).toHaveLength(64);

@@ -122,7 +122,10 @@ export const ModelLockSchema = z.object({
   locked: z.boolean().default(false),
   lockedAt: z.string().datetime().optional(),
   lockedBy: z.string().min(1).max(120).optional(),
-  reason: z.string().min(1).max(500).optional()
+  reason: z.string().min(1).max(500).optional(),
+  modelArtifact: z.string().min(1).max(500).optional(),
+  modelHash: z.string().length(64).regex(/^[a-f0-9]+$/).optional(),
+  sourceProjectHash: z.string().length(64).regex(/^[a-f0-9]+$/).optional()
 }).strict();
 export type ModelLock = z.infer<typeof ModelLockSchema>;
 

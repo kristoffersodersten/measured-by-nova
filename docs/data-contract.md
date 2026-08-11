@@ -75,11 +75,17 @@ Rules:
   "locked": true,
   "lockedAt": "2026-04-30T10:00:00.000Z",
   "lockedBy": "reviewer",
-  "reason": "3D model reviewed against measurements and reference photos."
+  "reason": "3D model reviewed against measurements and reference photos.",
+  "modelArtifact": "measurement-projects/example/artifacts/example.blend",
+  "modelHash": "<sha256 of reviewed Blender file>",
+  "sourceProjectHash": "<sha256 of canonical project source state>"
 }
 ```
 
-Exports intended for permit-support use must require `modelLock.locked === true`.
+Permit-support exports require the complete lock and recompute both hashes before
+Blender runs. A changed or missing Blender file and any changed project source
+state fail closed with machine-readable lock errors. Export manifests include
+the complete lock metadata.
 
 Model-lock and export requests also carry the execution contract defined in
 `docs/namaka-alignment.md`. Successful results include deterministic
