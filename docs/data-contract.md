@@ -39,6 +39,20 @@ Photos and AI-derived estimates never override measured dimensions.
 | `sourceOfTruthPolicy` | Non-negotiable accuracy and authority rules. |
 | `artifacts` | Generated local output paths. |
 
+## Material Metadata
+
+Each `materialNotes` entry targets at least one facade or element and records
+material identity, provenance, confidence, and verification. `colorReference`
+is optional and carries a structured `standard` (`NCS`, `RAL`, `manufacturer`,
+or `custom`), `code`, and optional label.
+
+Permit metadata includes only scope, material/color evidence, provenance,
+confidence, and verification. Optional `pbrPreview` values are a separate
+preview-only namespace with `previewOnly: true` and
+`geometryAuthority: false`; permit serialization strips that namespace. PBR
+values can therefore drive appearance without changing measured geometry or
+becoming permit truth.
+
 ## Confidence Semantics
 
 | Confidence | Meaning |

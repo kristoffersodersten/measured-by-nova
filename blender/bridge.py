@@ -415,8 +415,13 @@ def export_template(payload):
             "pdfRole": "layout-only",
             "rendererTolerance": {"metric": "pixel-difference-ratio", "maximum": 0.005},
         },
-        "materialEvidence": sorted(project.get("materialNotes", []), key=lambda item: (
-            item.get("facade", ""), item.get("material", ""), item.get("colorNote", "")
+        "materialEvidence": sorted([{
+            key: value for key, value in item.items() if key in (
+                "facade", "elementId", "material", "colorNote", "colorReference",
+                "confidence", "source", "verified"
+            )
+        } for item in project.get("materialNotes", [])], key=lambda item: (
+            item.get("facade", ""), item.get("elementId", ""), item.get("material", ""), item.get("colorNote", "")
         )),
         "options": options,
     }
@@ -583,7 +588,18 @@ def write_gothenburg_facade_pack_pdf(pdf_path, output_dir, expected, project, te
         for element in project.get("elements", [])
         if isinstance(element.get("metadata"), dict) and element.get("metadata", {}).get("material")
     })
-    material_notes = [f"Observed/model metadata: {value}" for value in materials] or ["No material/color metadata declared"]
+    declared_material_notes = []
+    for note in project.get("materialNotes", []):
+        color_reference = note.get("colorReference") or {}
+        color_code = ""
+        if color_reference.get("standard") and color_reference.get("code"):
+            color_code = f" [{color_reference['standard']} {color_reference['code']}]"
+        color_note = f": {note['colorNote']}" if note.get("colorNote") else ""
+        target = note.get("elementId") or note.get("facade", "all")
+        declared_material_notes.append(
+            f"{target}: {note['material']}{color_code}{color_note} ({note['confidence']}, {note['source']})"
+        )
+    material_notes = declared_material_notes or [f"Observed/model metadata: {value}" for value in materials] or ["No material/color metadata declared"]
     source_statement = "Measured Blender visualization - not CAD, BIM or survey output"
     layout = {
         "schemaVersion": 1,
