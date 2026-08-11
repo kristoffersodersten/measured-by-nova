@@ -6,6 +6,7 @@ import path from "node:path";
 import type { BlenderConfig, BlenderToolResult } from "./contracts.js";
 import { runBlenderJob, safeOutputPath } from "./blenderRunner.js";
 import { DefaultCapabilityManifest, evaluateCapabilityExecution } from "./capabilityManifest.js";
+import { buildExecutionActionEvidence, evaluateExecutionIntent, type ExecutionIntent } from "./executionGate.js";
 import { captureToFixture, RealCarportCaptureSchema } from "./captureToFixture.js";
 import {
   buildDigitalViewingBlenderRenderJob,
@@ -223,6 +224,10 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
   register(server, "lock_model_for_export", "Lock a human-reviewed model so permit-support exports can be generated without geometry changes.", LockModelForExportSchema, async (input) => {
     const req = requestId();
     const payload = LockModelForExportSchema.parse(input);
+    const executionGate = evaluateExecutionIntent(payload.executionIntent, "lock-model");
+    if (!executionGate.ok) {
+      return failExecutionIntent(req, executionGate);
+    }
     const project = materializeProfiles(await readProject(config, payload.projectId));
     const gate = qualityGate(project);
     if (!gate.ok) {
@@ -231,7 +236,16 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     const next = { ...project, modelLock: { locked: true, lockedAt: new Date().toISOString(), lockedBy: payload.lockedBy, reason: payload.reason } };
     await writeProject(config, next);
     await appendRequestLog(config, payload.projectId, req, "lock_model_for_export", payload);
-    return ok(req, { modelLock: next.modelLock }, formatReasons(gate));
+    const executionAction = buildExecutionActionEvidence(payload.executionIntent, {
+      changedArtifacts: [path.join("measurement-projects", payload.projectId, "project.json")],
+      verificationResults: [
+        { check: "schema", ok: true, evidence: "Lock input and execution intent matched strict schemas." },
+        { check: "quality-gate", ok: gate.ok, evidence: "Measurement project quality gate passed before model lock." },
+        { check: "manifest", ok: true, evidence: "Model-lock manifest hash derived after the project write." }
+      ],
+      manifest: { projectId: payload.projectId, modelLock: next.modelLock }
+    });
+    return ok(req, { modelLock: next.modelLock, execution: { intent: payload.executionIntent, action: executionAction } }, formatReasons(gate));
   });
 
   register(server, "generate_elevation_views", "Create locked orthographic plan, elevation, and section cameras/render targets from Blender geometry.", GenerateElevationViewsSchema, async (input) => {
@@ -246,24 +260,39 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
   register(server, "export_model", "Export the measured project model as blend, GLB, and/or OBJ artifacts.", ExportMeasuredModelSchema, async (input) => {
     const req = requestId();
     const payload = ExportMeasuredModelSchema.parse(input);
+    const executionGate = evaluateExecutionIntent(payload.executionIntent, "export-model");
+    if (!executionGate.ok) {
+      return failExecutionIntent(req, executionGate);
+    }
     const project = materializeProfiles(await readProject(config, payload.projectId));
-    const result = await runBlenderJob(config, { mode: "measurement_project", operation: "export_model", project, formats: payload.formats }, path.join("measurement-projects", payload.projectId, "artifacts", `${payload.projectId}-export.blend`));
+    const outputBlend = path.join("measurement-projects", payload.projectId, "artifacts", `${payload.projectId}-export.blend`);
+    const result = await runBlenderJob(config, { mode: "measurement_project", operation: "export_model", project, formats: payload.formats }, outputBlend);
     await appendRequestLog(config, payload.projectId, req, "export_model", payload);
-    return ok(req, { blender: result, formats: payload.formats });
+    const executionAction = exportActionEvidence(payload.executionIntent, result, outputBlend, { formats: payload.formats, blender: result });
+    return ok(req, { blender: result, formats: payload.formats, execution: { intent: payload.executionIntent, action: executionAction } });
   });
 
   register(server, "export_dimensioned_drawings", "Generate a permit-oriented visualization PDF with dimension annotations, scale bars, and a confidence legend.", ExportDimensionedDrawingsSchema, async (input) => {
     const req = requestId();
     const payload = ExportDimensionedDrawingsSchema.parse(input);
+    const executionGate = evaluateExecutionIntent(payload.executionIntent, "export-drawings");
+    if (!executionGate.ok) {
+      return failExecutionIntent(req, executionGate);
+    }
     const project = materializeProfiles(await readProject(config, payload.projectId));
     const result = await runBlenderJob(config, { mode: "measurement_project", operation: "dimensioned_drawings", project, outputPath: safeOutputPath(config.outputDir, payload.outputPath), scale: payload.scale, includeConfidenceLegend: payload.includeConfidenceLegend }, path.join("measurement-projects", payload.projectId, "artifacts", `${payload.projectId}-drawings.blend`));
     await appendRequestLog(config, payload.projectId, req, "export_dimensioned_drawings", payload);
-    return ok(req, { blender: result, outputPath: safeOutputPath(config.outputDir, payload.outputPath) });
+    const executionAction = exportActionEvidence(payload.executionIntent, result, payload.outputPath, { outputPath: payload.outputPath, scale: payload.scale, blender: result });
+    return ok(req, { blender: result, outputPath: safeOutputPath(config.outputDir, payload.outputPath), execution: { intent: payload.executionIntent, action: executionAction } });
   });
 
   register(server, "export_facade_completion_pack", "Export the MVP facade-completion package from a locked measured model using Blender orthographic views.", ExportFacadeCompletionPackSchema, async (input) => {
     const req = requestId();
     const payload = ExportFacadeCompletionPackSchema.parse(input);
+    const executionGate = evaluateExecutionIntent(payload.executionIntent, "export-facade-pack");
+    if (!executionGate.ok) {
+      return failExecutionIntent(req, executionGate);
+    }
     const project = materializeProfiles(await readProject(config, payload.projectId));
     const gate = qualityGate(project);
     const capability = evaluateCapabilityExecution(DefaultCapabilityManifest, { template: payload.template, strategies: PermitExportStrategies });
@@ -290,12 +319,17 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     const next = { ...project, artifacts: { ...project.artifacts, [artifactKey]: safeOutputPath(config.outputDir, outputDir) } };
     await writeProject(config, next);
     await appendRequestLog(config, payload.projectId, req, "export_facade_completion_pack", payload);
-    return ok(req, { blender: result, template: payload.template, outputDir: next.artifacts[artifactKey], qualityGate: gate, capability }, exportTemplateWarnings(payload.template));
+    const executionAction = exportActionEvidence(payload.executionIntent, result, outputDir, { template: payload.template, outputDir, qualityGate: gate, capability, blender: result });
+    return ok(req, { blender: result, template: payload.template, outputDir: next.artifacts[artifactKey], qualityGate: gate, capability, execution: { intent: payload.executionIntent, action: executionAction } }, exportTemplateWarnings(payload.template));
   });
 
   register(server, "export_project_template", "Export a recipient-specific measured visualization package without changing or reconstructing project geometry.", ExportProjectTemplateSchema, async (input) => {
     const req = requestId();
     const payload = ExportProjectTemplateSchema.parse(input);
+    const executionGate = evaluateExecutionIntent(payload.executionIntent, "export-template");
+    if (!executionGate.ok) {
+      return failExecutionIntent(req, executionGate);
+    }
     const project = materializeProfiles(await readProject(config, payload.projectId));
     const outputDir = payload.outputDir ?? path.join("measurement-projects", payload.projectId, "exports", payload.template);
     const outputBlend = path.join(outputDir, `${payload.projectId}-${payload.template}.blend`);
@@ -304,7 +338,8 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     const next = { ...project, artifacts: { ...project.artifacts, [artifactKey]: safeOutputPath(config.outputDir, outputDir) } };
     await writeProject(config, next);
     await appendRequestLog(config, payload.projectId, req, "export_project_template", payload);
-    return ok(req, { blender: result, template: payload.template, outputDir: next.artifacts[artifactKey] }, exportTemplateWarnings(payload.template));
+    const executionAction = exportActionEvidence(payload.executionIntent, result, outputDir, { template: payload.template, outputDir, blender: result });
+    return ok(req, { blender: result, template: payload.template, outputDir: next.artifacts[artifactKey], execution: { intent: payload.executionIntent, action: executionAction } }, exportTemplateWarnings(payload.template));
   });
 
   register(server, "list_digital_viewing_capture_presets", "List deterministic domain capture presets that define required photos, measurements, materials, and condition evidence before rendering.", ListDigitalViewingCapturePresetsInputSchema, (input) => {
@@ -590,6 +625,34 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     const payload = UnsafeRunPythonSchema.parse(input);
     const result = await runBlenderJob(config, { mode: "python", ...payload, requestId: req }, payload.outputFile ?? "python-output.blend");
     return ok(req, { blender: result }, ["Unsafe Python execution was explicitly allowed and audited."]);
+  });
+}
+
+function failExecutionIntent(req: string, gate: ReturnType<typeof evaluateExecutionIntent>) {
+  return fail(
+    req,
+    "execution_intent_rejected",
+    "Measured write execution requires an explicit Namaka/Axiome-compatible intent envelope.",
+    gate.blocking.map((reason) => `${reason.code}: ${reason.message}`),
+    { intentHash: gate.intentHash, blocking: gate.blocking }
+  );
+}
+
+function exportActionEvidence(
+  intent: ExecutionIntent,
+  result: BlenderToolResult,
+  declaredArtifact: string,
+  manifest: unknown
+) {
+  const changedArtifacts = Array.from(new Set([declaredArtifact, ...(result.outputPath ? [result.outputPath] : [])]));
+  return buildExecutionActionEvidence(intent, {
+    changedArtifacts,
+    verificationResults: [
+      { check: "schema", ok: true, evidence: "Export input and execution intent matched strict schemas." },
+      { check: "quality-gate", ok: result.ok, evidence: result.ok ? "Blender export completed without fallback." : `Blender export failed causally: ${result.error?.code ?? "unknown_error"}.` },
+      { check: "manifest", ok: true, evidence: "Action manifest hash derived from declared export result." }
+    ],
+    manifest
   });
 }
 

@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { CarportProfileParametersSchema, CreateMeasurementProjectSchema, ExportFacadeCompletionPackSchema, ExportProjectTemplateSchema, ImportReferencePhotosSchema, MeasurementProjectSchema, UnsafeRunPythonSchema } from "../src/measurementContracts.js";
 
+function executionIntent(operation: "export-facade-pack" | "export-template", writeScope: Array<"project-state" | "blender-output" | "manifest">) {
+  return {
+    intentId: `intent-${operation}`,
+    operation,
+    objective: `Execute ${operation} from reviewed project state`,
+    writeScope,
+    forbiddenScope: ["source-measurements", "locked-geometry"],
+    selectedToolPath: "mcp:nova-measured",
+    acceptanceChecks: ["schema", "quality-gate", "manifest"],
+    executionPolicy: { locality: "local-only", telemetry: false, fallback: "none", geometryMutation: false }
+  };
+}
+
 const fixture = {
   widthMm: 7676,
   depthMm: 6240,
@@ -36,6 +49,7 @@ describe("measurement contracts", () => {
   it("accepts recipient-specific export templates", () => {
     const result = ExportProjectTemplateSchema.parse({
       projectId: "carport-fixture",
+      executionIntent: executionIntent("export-template", ["project-state", "blender-output", "manifest"]),
       template: "gothenburg-permit"
     });
 
@@ -46,6 +60,7 @@ describe("measurement contracts", () => {
   it("keeps cad-simulated only as a legacy export template", () => {
     const result = ExportProjectTemplateSchema.parse({
       projectId: "carport-fixture",
+      executionIntent: executionIntent("export-template", ["project-state", "blender-output", "manifest"]),
       template: "cad-simulated"
     });
 
@@ -73,7 +88,10 @@ describe("measurement contracts", () => {
   });
 
   it("accepts the primary facade completion export contract", () => {
-    const result = ExportFacadeCompletionPackSchema.parse({ projectId: "carport-fixture" });
+    const result = ExportFacadeCompletionPackSchema.parse({
+      projectId: "carport-fixture",
+      executionIntent: executionIntent("export-facade-pack", ["project-state", "blender-output", "manifest"])
+    });
 
     expect(result.template).toBe("permit-facade-pack");
     expect(result.views).toEqual(["north", "south", "east", "west"]);
@@ -83,6 +101,7 @@ describe("measurement contracts", () => {
   it("requires exactly four standard facade views for facade completion export", () => {
     expect(() => ExportFacadeCompletionPackSchema.parse({
       projectId: "carport-fixture",
+      executionIntent: executionIntent("export-facade-pack", ["project-state", "blender-output", "manifest"]),
       views: ["north", "south", "east"]
     })).toThrow();
   });

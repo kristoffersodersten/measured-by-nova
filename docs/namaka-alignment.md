@@ -52,9 +52,11 @@ Measured should treat these concepts as product requirements:
 - tutorial events for non-intentional errors
 - deterministic takeover or escalation only through declared rules
 
-Current Measured implementation does not yet import `axiome-core` as a runtime
-dependency. Until that exists, Measured must mirror the contract in local
-schemas, quality gates, manifests, and tests.
+Measured does not import `axiome-core` as a runtime dependency. The current
+local enforcement boundary mirrors the contract in `src/executionGate.ts`,
+write-capable input schemas, quality gates, action evidence, manifests, and
+tests. A future shared dependency may replace this local owner only when it
+preserves the same fail-closed contract.
 
 ## Measured Execution Contract
 
@@ -78,6 +80,24 @@ Every write-capable operation should be representable as:
 ```
 
 This is a product-level contract even before cryptographic signing is added.
+
+## Runtime Enforcement
+
+Model lock and export operations require an `executionIntent` before any
+project read, Blender invocation, or artifact write. The intent binds:
+
+- the exact operation and non-ambiguous objective
+- required write scopes
+- forbidden `source-measurements` and `locked-geometry` scopes
+- the selected `mcp:nova-measured` tool path
+- schema, quality-gate, and manifest acceptance checks
+- `local-only`, no-telemetry, no-fallback, and no-geometry-mutation policy
+
+Rejected intents return `execution_intent_rejected` with deterministic causal
+blocking codes. Successful operations emit the accepted intent and action
+evidence containing sorted changed artifacts, verification results, an intent
+hash, and a manifest hash. Action evidence is execution provenance; it never
+becomes geometry or capture authority.
 
 ## Data Sovereignty
 

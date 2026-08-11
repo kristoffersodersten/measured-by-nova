@@ -81,6 +81,12 @@ Rules:
 
 Exports intended for permit-support use must require `modelLock.locked === true`.
 
+Model-lock and export requests also carry the execution contract defined in
+`docs/namaka-alignment.md`. Successful results include deterministic
+intent/action evidence. This evidence records authorized scope, verification,
+and changed artifacts but may not alter measurements, locked geometry, or
+capture provenance.
+
 ## Capture Contract
 
 Capture contracts define what must be collected before a fixture can become exportable.
