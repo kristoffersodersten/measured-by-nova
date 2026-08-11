@@ -35,6 +35,15 @@ export const MaterialNoteSchema = z.object({
 }).strict();
 export type MaterialNote = z.infer<typeof MaterialNoteSchema>;
 
+export const FacadeLevelSchema = z.object({
+  facade: z.enum(["north", "south", "east", "west"]),
+  baseLevelMm: MmSchema,
+  topLevelMm: MmSchema,
+  confidence: ConfidenceSchema,
+  source: z.enum(["permit_pdf", "manual_measurement"])
+}).strict().refine((value) => value.topLevelMm > value.baseLevelMm, { message: "Facade top level must be above base level." });
+export type FacadeLevel = z.infer<typeof FacadeLevelSchema>;
+
 export const KnownDimensionSchema = z.object({
   label: z.string().min(1).max(120),
   valueMm: PositiveMmSchema,
@@ -68,6 +77,8 @@ export const StepRunSchema = z.object({
   stepHeightMm: PositiveMmSchema,
   count: z.number().int().positive().max(100),
   locationHint: z.string().min(1).max(160).optional(),
+  facade: z.enum(["north", "south", "east", "west"]).optional(),
+  direction: z.enum(["north", "south", "east", "west", "up", "down"]).optional(),
   confidence: ConfidenceSchema
 }).strict();
 export type StepRun = z.infer<typeof StepRunSchema>;
@@ -174,6 +185,7 @@ export const MeasurementProjectSchema = z.object({
   unit: z.literal("mm"),
   photos: z.array(PhotoReferenceSchema).default([]),
   materialNotes: z.array(MaterialNoteSchema).default([]),
+  facadeLevels: z.array(FacadeLevelSchema).default([]),
   dimensions: z.array(KnownDimensionSchema).default([]),
   planes: z.array(ReferencePlaneSchema).default([]),
   elements: z.array(ParametricElementSchema).default([]),

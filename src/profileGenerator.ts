@@ -12,7 +12,7 @@ function roofHeightAtX(x: number, width: number, high: number, low: number, offs
 }
 
 export function materializeProfiles(project: MeasurementProject): MeasurementProject {
-  const elements: ParametricElement[] = [];
+  const elements: ParametricElement[] = project.elements.filter((element) => element.metadata.captureContractV2 === true);
   for (const profile of project.profiles) {
     if (profile.profile === "carport") {
       elements.push(...carportElements(profile));
