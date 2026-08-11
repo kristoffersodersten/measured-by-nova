@@ -377,6 +377,13 @@ def export_template(payload):
         "schemaVersion": 1,
         "projectId": project_id,
         "template": template,
+        "outputClassification": {
+            "purpose": "technical-permit-support",
+            "authority": "locked-blender-orthographic-line-artifacts",
+            "visualMode": "technical-line",
+            "photorealismAuthoritative": False,
+            "previewRenderAcceptedAsSourceOfTruth": False,
+        },
         "sourceOfTruth": {
             "measurements": "primary",
             "photos": "non-authoritative-reference-only",
@@ -408,6 +415,9 @@ def export_template(payload):
             "pdfRole": "layout-only",
             "rendererTolerance": {"metric": "pixel-difference-ratio", "maximum": 0.005},
         },
+        "materialEvidence": sorted(project.get("materialNotes", []), key=lambda item: (
+            item.get("facade", ""), item.get("material", ""), item.get("colorNote", "")
+        )),
         "options": options,
     }
 

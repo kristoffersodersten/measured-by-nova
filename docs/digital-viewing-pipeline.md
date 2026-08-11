@@ -1473,6 +1473,18 @@ Measured delivers:
 - output manifest
 - optional technical dimension sheets
 
+Every PBR render manifest is classified as `photorealistic-preview` with
+`authority: preview-only`, `permitSourceOfTruth: false`, and
+`geometryAuthority: false`. The current rendering path also declares
+`validationStatus: not-separately-validated`; a preview cannot be promoted by
+an administrator or caller field. A future validated render category requires
+a separate, hash-bound validation contract and implementation.
+
+Technical permit sheets are produced by the separate facade export path from
+locked orthographic Blender line artifacts. They may show sourced material
+notes, but neither material photos nor photorealistic renders become geometry
+authority.
+
 ## Quality Gates
 
 The pipeline must block when:

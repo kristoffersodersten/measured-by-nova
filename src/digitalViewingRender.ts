@@ -145,6 +145,14 @@ export function buildDigitalViewingRenderManifest(
     captureId: capture.captureId,
     projectId: capture.projectId,
     assetType: capture.assetType,
+    outputClassification: {
+      purpose: "photorealistic-preview",
+      authority: "preview-only",
+      previewOnly: true,
+      permitSourceOfTruth: false,
+      geometryAuthority: false,
+      validationStatus: "not-separately-validated"
+    },
     notGeometryAuthority: true,
     sourceOfTruth: {
       geometry: "verified-measurements",

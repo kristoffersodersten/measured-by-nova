@@ -1038,6 +1038,22 @@ describe("digital viewing capture contract", () => {
     expect(DigitalViewingRenderManifestSchema.parse(first)).toEqual(first);
     expect(second).toEqual(first);
     expect(first.notGeometryAuthority).toBe(true);
+    expect(first.outputClassification).toEqual({
+      purpose: "photorealistic-preview",
+      authority: "preview-only",
+      previewOnly: true,
+      permitSourceOfTruth: false,
+      geometryAuthority: false,
+      validationStatus: "not-separately-validated"
+    });
+    expect(() => DigitalViewingRenderManifestSchema.parse({
+      ...first,
+      outputClassification: {
+        ...first.outputClassification,
+        authority: "locked-blender-orthographic-line-artifacts",
+        permitSourceOfTruth: true
+      }
+    })).toThrow();
     expect(first.sourceOfTruth).toEqual({
       geometry: "verified-measurements",
       visualEvidence: "structured-photos-material-condition-context",

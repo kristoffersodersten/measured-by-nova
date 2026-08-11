@@ -32,7 +32,7 @@ describe("real capture to fixture pipeline", () => {
     expect(result.project.projectId).toBe("real-carport-minimal");
     expect(result.project.photos).toHaveLength(4);
     expect(result.project.photos.every((photo) => photo.confidence === "low")).toBe(true);
-    expect(result.project.materialNotes).toHaveLength(2);
+    expect(result.project.materialNotes).toHaveLength(4);
     expect(result.project.facadeLevels.map((level) => level.facade)).toEqual(["north", "south", "east", "west"]);
     expect(result.project.openings).toContainEqual(expect.objectContaining({ hostElementId: "south-facade", openType: "open", confidence: "high" }));
     expect(result.project.elements).toContainEqual(expect.objectContaining({

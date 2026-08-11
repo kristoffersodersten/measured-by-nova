@@ -62,7 +62,9 @@
   ],
   "materialNotes": [
     { "facade": "all", "material": "white-painted-wood", "colorNote": "White painted horizontal cladding", "confidence": "medium", "source": "photo_reference", "verified": true },
-    { "facade": "all", "material": "dark-stone", "colorNote": "Dark foundation stone", "confidence": "medium", "source": "photo_reference", "verified": true }
+    { "facade": "all", "material": "dark-stone", "colorNote": "Dark foundation stone", "confidence": "medium", "source": "photo_reference", "verified": true },
+    { "facade": "all", "material": "dark-roof", "colorNote": "Dark roof and fascia", "confidence": "medium", "source": "photo_reference", "verified": true },
+    { "facade": "all", "material": "driveable-gravel-floor", "colorNote": "Driveable gravel context surface", "confidence": "low", "source": "photo_reference", "verified": true }
   ],
   "assumptions": [
     {
