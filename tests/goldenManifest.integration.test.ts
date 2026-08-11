@@ -254,6 +254,12 @@ describe("golden manifest integration", () => {
     const materializedProject = materializeProfiles(MeasurementProjectSchema.parse(fixtureRaw));
     const project = {
       ...materializedProject,
+      materialNotes: [
+        { facade: "all" as const, material: "white-painted-wood", colorNote: "White painted horizontal cladding", confidence: "medium" as const, source: "photo_reference" as const, verified: true },
+        { facade: "all" as const, material: "dark-stone", colorNote: "Dark foundation stone", confidence: "medium" as const, source: "photo_reference" as const, verified: true },
+        { facade: "all" as const, material: "dark-roof", colorNote: "Dark roof and fascia", confidence: "medium" as const, source: "photo_reference" as const, verified: true },
+        { facade: "all" as const, material: "driveable-gravel-floor", colorNote: "Driveable gravel context surface", confidence: "low" as const, source: "photo_reference" as const, verified: true }
+      ],
       modelLock: {
         ...materializedProject.modelLock,
         modelArtifact: "measurement-projects/synthetic-carport/artifacts/synthetic-carport.blend",
