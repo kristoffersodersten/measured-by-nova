@@ -686,6 +686,18 @@ The current bridge can produce measured Blender artifacts, orthographic view ima
 
 This keeps local geometry stable while letting each recipient receive only the representation they need.
 
+### Gothenburg facade pack contract
+
+The governed facade templates produce an A3 landscape layout only after Blender
+has rendered the locked north, south, east, and west orthographic artifacts. The
+layout step verifies and records each PNG's critical-chunk SHA-256 identity; it
+does not project, reconstruct, or mutate geometry. Its manifest records the
+included views, scale and scale bar, title block, material/color metadata,
+measurements, assumptions, confidence legend, mark-line role, and the explicit
+source statement `Measured Blender visualization - not CAD, BIM or survey
+output`. A missing required view fails the export instead of producing a partial
+permit-support pack.
+
 `cad-simulated` remains only as a deprecated legacy alias for older clients. New public templates must avoid CAD wording and use `permit-facade-pack`, `swedish-municipality`, `gothenburg-permit`, or `measured-visualization`.
 
 ## Open Core Boundary

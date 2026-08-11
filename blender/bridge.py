@@ -4,6 +4,7 @@ import json
 import math
 import struct
 import sys
+import zlib
 from pathlib import Path
 
 import bpy
@@ -410,14 +411,18 @@ def export_template(payload):
         "options": options,
     }
 
-    if template in ("permit", "permit-facade-pack", "swedish-municipality", "gothenburg-permit", "measured-visualization", "cad-simulated", "measurement-book", "qa-validation", "site-context", "photo-alignment"):
+    governed_facade_templates = ("permit-facade-pack", "swedish-municipality", "gothenburg-permit", "measured-visualization")
+    if template in ("permit", "cad-simulated", "measurement-book", "qa-validation", "site-context", "photo-alignment"):
         write_template_pdf(output_dir / expected["pdf"], project, template, options)
     if template == "fabrication":
         write_cad_simulated_svg(output_dir / expected["svg"], project, template, options)
-    if template in ("permit-facade-pack", "swedish-municipality", "gothenburg-permit", "measured-visualization"):
+    if template in governed_facade_templates:
         write_measured_visualization_validation(output_dir / expected["validation"], project, options, normalization_report)
         write_orthographic_png_preview(output_dir / expected["png"], project)
         write_multiview_orthographic_exports(output_dir, expected, project)
+        manifest["layout"] = write_gothenburg_facade_pack_pdf(
+            output_dir / expected["pdf"], output_dir, expected, project, template, options
+        )
     if template == "cad-simulated":
         validation_report = write_cad_pipeline_validation(output_dir / expected["validation"], project, options, normalization_report)
         if not validation_report["ok"]:
@@ -530,6 +535,196 @@ def write_template_pdf(pdf_path, project, template, options=None):
         "%%EOF",
     ]
     pdf_path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def write_gothenburg_facade_pack_pdf(pdf_path, output_dir, expected, project, template, options):
+    view_specs = [
+        ("north", "FASAD NORR / NORTH", "northPng"),
+        ("south", "FASAD SODER / SOUTH", "southPng"),
+        ("east", "FASAD OSTER / EAST", "eastPng"),
+        ("west", "FASAD VASTER / WEST", "westPng"),
+    ]
+    included_views = []
+    for name, title, artifact_key in view_specs:
+        artifact = expected.get(artifact_key)
+        artifact_path = output_dir / artifact if artifact else None
+        if artifact_path is None or not artifact_path.is_file():
+            raise ValueError(f"Gothenburg facade pack requires locked Blender view artifact: {artifact_key}")
+        content = artifact_path.read_bytes()
+        included_views.append({
+            "name": name,
+            "title": title,
+            "artifact": artifact,
+            "sha256": png_semantic_hash(content),
+            "hashScope": "png-critical-chunks",
+        })
+
+    scale = options.get("scale", "1:100")
+    dimensions = [{
+        "label": item["label"], "valueMm": item["valueMm"],
+        "confidence": item["confidence"], "source": item["source"],
+    } for item in project.get("dimensions", [])]
+    assumptions = [{
+        "id": item["id"], "text": item["text"], "confidence": item["confidence"],
+        "affectsGeometry": item.get("affectsGeometry", False),
+    } for item in project.get("assumptions", [])]
+    materials = sorted({
+        element.get("metadata", {}).get("material")
+        for element in project.get("elements", [])
+        if isinstance(element.get("metadata"), dict) and element.get("metadata", {}).get("material")
+    })
+    material_notes = [f"Observed/model metadata: {value}" for value in materials] or ["No material/color metadata declared"]
+    source_statement = "Measured Blender visualization - not CAD, BIM or survey output"
+    layout = {
+        "schemaVersion": 1,
+        "paper": {"format": "A3", "orientation": "landscape", "widthMm": 420, "heightMm": 297},
+        "scale": scale,
+        "scaleBar": {"unit": "mm", "segments": 5, "segmentLengthMmAtObjectScale": 1000},
+        "includedViews": included_views,
+        "titleBlock": {"projectId": project["projectId"], "template": template, "modelLocked": bool(options.get("lockedModel"))},
+        "materialColorNotes": material_notes,
+        "measurements": dimensions,
+        "assumptions": assumptions,
+        "confidenceLegend": {
+            "high": "permit/PDF/known plan dimension",
+            "medium": "manual site measurement",
+            "low": "photo reference or inferred detail",
+        },
+        "markLine": {"label": "MARKLINJE / EXISTING GROUND REFERENCE", "role": "layout-reference-only"},
+        "sourceStatement": source_statement,
+        "geometryMutationAllowed": False,
+        "consumes": "locked-blender-view-artifacts-and-project-metadata-only",
+    }
+
+    commands = ["0.5 w", "30 30 1130 780 re S"]
+    panel_positions = [(50, 470), (610, 470), (50, 175), (610, 175)]
+    for (_, title, artifact_key), (x, y) in zip(view_specs, panel_positions):
+        artifact = expected[artifact_key]
+        commands.extend([
+            f"{x} {y} 530 245 re S",
+            f"BT /F1 13 Tf {x + 12} {y + 222} Td ({pdf_text(title)}) Tj ET",
+            f"q 190 0 0 190 {x + 170} {y + 25} cm /Im{len(commands)} Do Q",
+            f"BT /F1 8 Tf {x + 12} {y + 12} Td (Blender artifact: {pdf_text(artifact)}) Tj ET",
+        ])
+    commands.extend([
+        "50 145 m 580 145 l S",
+        "BT /F1 9 Tf 50 151 Td (MARKLINJE / EXISTING GROUND REFERENCE) Tj ET",
+        f"BT /F1 11 Tf 620 145 Td (SKALA / SCALE {pdf_text(scale)}) Tj ET",
+        "620 125 m 870 125 l S", "620 120 m 620 130 l S", "670 120 m 670 130 l S",
+        "720 120 m 720 130 l S", "770 120 m 770 130 l S", "820 120 m 820 130 l S", "870 120 m 870 130 l S",
+        "BT /F1 7 Tf 620 110 Td (0   1m   2m   3m   4m   5m) Tj ET",
+        f"BT /F1 10 Tf 50 85 Td ({pdf_text(source_statement)}) Tj ET",
+        f"BT /F1 9 Tf 50 68 Td (Project: {pdf_text(project['projectId'])} | Template: {pdf_text(template)}) Tj ET",
+        "BT /F1 8 Tf 50 51 Td (Confidence: HIGH=permit/PDF | MEDIUM=manual measurement | LOW=photo/inferred) Tj ET",
+        f"BT /F1 8 Tf 50 36 Td (Model lock present: {str(bool(options.get('lockedModel'))).lower()}) Tj ET",
+    ])
+    measurement_lines = [f"MEASUREMENTS ({len(dimensions)}):"] + [
+        f"{item['label']}={item['valueMm']}mm [{item['confidence']}; {item['source']}]" for item in dimensions
+    ]
+    y = 96
+    for line in measurement_lines:
+        commands.append(f"BT /F1 7 Tf 620 {y} Td ({pdf_text(line[:105])}) Tj ET")
+        y -= 10
+    material_summary = "; ".join(material_notes)
+    commands.append(f"BT /F1 6 Tf 620 39 Td (MATERIAL/COLOR: {pdf_text(material_summary[:120])}) Tj ET")
+    assumption_summary = "; ".join(f"{item['id']} [{item['confidence']}]" for item in assumptions) or "none declared"
+    commands.append(f"BT /F1 6 Tf 620 29 Td (ASSUMPTIONS: {pdf_text(assumption_summary[:120])}) Tj ET")
+    image_paths = [output_dir / expected[artifact_key] for _, _, artifact_key in view_specs]
+    image_names = [command.split("/")[1].split()[0] for command in commands if " cm /Im" in command]
+    write_pdf_with_png_images(pdf_path, 1190.55, 841.89, commands, list(zip(image_names, image_paths)))
+    return layout
+
+
+def png_pdf_image(png_path):
+    content = png_path.read_bytes()
+    if not content.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError(f"Facade view is not a PNG: {png_path.name}")
+    offset = 8
+    width = height = color_type = None
+    compressed = bytearray()
+    while offset < len(content):
+        length = struct.unpack(">I", content[offset:offset + 4])[0]
+        chunk_type = content[offset + 4:offset + 8]
+        chunk_data = content[offset + 8:offset + 8 + length]
+        if chunk_type == b"IHDR":
+            width, height, bit_depth, color_type = struct.unpack(">IIBB", chunk_data[:10])
+            if bit_depth != 8 or color_type not in (2, 6):
+                raise ValueError(f"Facade PNG must be 8-bit RGB/RGBA for PDF embedding: {png_path.name}")
+        elif chunk_type == b"IDAT":
+            compressed.extend(chunk_data)
+        offset += 12 + length
+    if width is None or height is None or not compressed:
+        raise ValueError(f"Facade PNG is incomplete: {png_path.name}")
+    if color_type == 2:
+        return width, height, bytes(compressed)
+    decoded = zlib.decompress(bytes(compressed))
+    stride = width * 4
+    previous = bytearray(stride)
+    rgb_rows = bytearray()
+    offset = 0
+    for _ in range(height):
+        filter_type = decoded[offset]
+        raw = decoded[offset + 1:offset + 1 + stride]
+        row = bytearray(stride)
+        for index, value in enumerate(raw):
+            left = row[index - 4] if index >= 4 else 0
+            above = previous[index]
+            upper_left = previous[index - 4] if index >= 4 else 0
+            if filter_type == 0:
+                predictor = 0
+            elif filter_type == 1:
+                predictor = left
+            elif filter_type == 2:
+                predictor = above
+            elif filter_type == 3:
+                predictor = (left + above) // 2
+            elif filter_type == 4:
+                p = left + above - upper_left
+                distances = (abs(p - left), abs(p - above), abs(p - upper_left))
+                predictor = (left, above, upper_left)[distances.index(min(distances))]
+            else:
+                raise ValueError(f"Facade PNG uses unsupported row filter: {filter_type}")
+            row[index] = (value + predictor) & 0xFF
+        rgb_rows.append(0)
+        for index in range(0, stride, 4):
+            rgb_rows.extend(row[index:index + 3])
+        previous = row
+        offset += stride + 1
+    return width, height, zlib.compress(bytes(rgb_rows), level=9)
+
+
+def write_pdf_with_png_images(pdf_path, width_pt, height_pt, commands, named_paths):
+    images = [(name, *png_pdf_image(path)) for name, path in named_paths]
+    xobjects = " ".join(f"/{name} {6 + index} 0 R" for index, (name, _, _, _) in enumerate(images))
+    content = "\n".join(commands).encode("utf-8")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width_pt:.2f} {height_pt:.2f}] /Resources << /Font << /F1 5 0 R >> /XObject << {xobjects} >> >> /Contents 4 0 R >>".encode("utf-8"),
+        f"<< /Length {len(content)} >>\nstream\n".encode("utf-8") + content + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    for _, width, height, compressed in images:
+        header = (
+            f"<< /Type /XObject /Subtype /Image /Width {width} /Height {height} "
+            f"/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode "
+            f"/DecodeParms << /Predictor 15 /Colors 3 /BitsPerComponent 8 /Columns {width} >> "
+            f"/Length {len(compressed)} >>\nstream\n"
+        ).encode("utf-8")
+        objects.append(header + compressed + b"\nendstream")
+    output = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets = []
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(output))
+        output.extend(f"{index} 0 obj\n".encode("utf-8"))
+        output.extend(obj)
+        output.extend(b"\nendobj\n")
+    xref_offset = len(output)
+    output.extend(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode("utf-8"))
+    for offset in offsets:
+        output.extend(f"{offset:010d} 00000 n \n".encode("utf-8"))
+    output.extend(f"trailer << /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode("utf-8"))
+    pdf_path.write_bytes(output)
 
 
 def write_blender_line_artifact_index(svg_path, expected, project_id, template):
