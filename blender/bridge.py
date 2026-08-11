@@ -299,6 +299,19 @@ def project_extents(project):
 
 
 def add_measurement_cameras(project):
+    registry = project.get("viewRegistry")
+    if registry:
+        for view in registry.get("views", []):
+            camera = add_camera(
+                tuple(value * MM_TO_M for value in view["cameraLocationMm"]),
+                tuple(value * MM_TO_M for value in view["targetMm"]),
+                name=view["name"],
+                orthographic=True,
+                scale=view["orthoScaleMm"] * MM_TO_M,
+            )
+            camera.data.clip_start = view["clipStartMm"] * MM_TO_M
+            camera.data.clip_end = view["clipEndMm"] * MM_TO_M
+        return
     min_x, min_y, min_z, max_x, max_y, max_z = project_extents(project)
     cx = (min_x + max_x) / 2
     cy = (min_y + max_y) / 2
@@ -381,6 +394,7 @@ def export_template(payload):
         },
         "artifacts": expected,
         "modelLock": options.get("lockedModel"),
+        "viewRegistry": options.get("viewRegistry"),
         "capabilityManifest": capability_manifest,
         "strategies": options.get("strategies", []),
         "options": options,

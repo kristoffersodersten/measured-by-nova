@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ExecutionIntentSchema } from "./executionGate.js";
+import { OrthographicViewRegistrySchema } from "./viewRegistry.js";
 
 export const ConfidenceSchema = z.enum(["high", "medium", "low"]);
 export type Confidence = z.infer<typeof ConfidenceSchema>;
@@ -171,6 +172,7 @@ export const MeasurementProjectSchema = z.object({
   profiles: z.array(ProfileInstanceSchema).default([]),
   validation: ValidationReportSchema.default({ ok: true, checks: [], warnings: [] }),
   modelLock: ModelLockSchema.default({}),
+  viewRegistry: OrthographicViewRegistrySchema.optional(),
   sourceOfTruthPolicy: SourceOfTruthPolicySchema.default({}),
   artifacts: ArtifactIndexSchema.default({})
 }).strict();

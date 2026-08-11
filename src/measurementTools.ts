@@ -43,6 +43,7 @@ import {
 } from "./digitalViewingContracts.js";
 import { materializeProfiles } from "./profileGenerator.js";
 import { buildModelLock, validateModelLock } from "./modelLock.js";
+import { buildOrthographicViewRegistry, validateRequiredViews } from "./viewRegistry.js";
 import { appendRequestLog, fail, ok, readProject, requestId, writeProject } from "./projectStore.js";
 import {
   CarportProfileParametersSchema,
@@ -259,9 +260,13 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     const req = requestId();
     const payload = GenerateElevationViewsSchema.parse(input);
     const project = materializeProfiles(await readProject(config, payload.projectId));
-    const result = await runBlenderJob(config, { mode: "measurement_project", operation: "elevation_views", project, views: payload.views }, path.join("measurement-projects", payload.projectId, "artifacts", `${payload.projectId}-views.blend`));
+    const viewRegistry = buildOrthographicViewRegistry(project.elements, payload.views);
+    const next = { ...project, viewRegistry };
+    const result = await runBlenderJob(config, { mode: "measurement_project", operation: "elevation_views", project: next, views: payload.views }, path.join("measurement-projects", payload.projectId, "artifacts", `${payload.projectId}-views.blend`));
+    if (!result.ok) return fail(req, "view_generation_failed", "Blender failed to generate the declared orthographic view registry.", [result.stderr]);
+    await writeProject(config, next);
     await appendRequestLog(config, payload.projectId, req, "generate_elevation_views", payload);
-    return ok(req, { blender: result, views: payload.views });
+    return ok(req, { blender: result, viewRegistry });
   });
 
   register(server, "export_model", "Export the measured project model as blend, GLB, and/or OBJ artifacts.", ExportMeasuredModelSchema, async (input) => {
@@ -310,6 +315,14 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     if (!lockValidation.ok) {
       return fail(req, "model_lock_invalid", "Reviewed model lock no longer matches project and Blender state.", lockValidation.blocking.map((reason) => `${reason.code}: ${reason.message}`), { blocking: lockValidation.blocking });
     }
+    const viewValidation = validateRequiredViews(project.viewRegistry, payload.views);
+    if (!viewValidation.ok) {
+      const blocking = [
+        ...viewValidation.missing.map((view) => ({ code: "required_view_missing", message: `Required orthographic view '${view}' is missing.` })),
+        ...(!viewValidation.hashValid ? [{ code: "view_registry_hash_mismatch", message: "Orthographic view registry hash does not match its definitions." }] : [])
+      ];
+      return fail(req, "view_registry_invalid", "Facade-completion export requires a complete unchanged orthographic view registry.", blocking.map((reason) => `${reason.code}: ${reason.message}`), { blocking });
+    }
     if (!gate.ok) {
       return fail(req, "quality_gate_failed", "Facade-completion export requires all quality gates to pass.", formatReasons(gate), { blocking: gate.blocking });
     }
@@ -324,7 +337,7 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
       project,
       template: payload.template,
       templateOutputDir: safeOutputPath(config.outputDir, outputDir),
-      options: { scale: payload.scale, views: payload.views, lockedModel: project.modelLock, capabilityManifest: DefaultCapabilityManifest, strategies: PermitExportStrategies }
+      options: { scale: payload.scale, views: payload.views, viewRegistry: project.viewRegistry, lockedModel: project.modelLock, capabilityManifest: DefaultCapabilityManifest, strategies: PermitExportStrategies }
     }, outputBlend);
     const artifactKey = `facadeCompletionPack:${payload.template}`;
     const next = { ...project, artifacts: { ...project.artifacts, [artifactKey]: safeOutputPath(config.outputDir, outputDir) } };
