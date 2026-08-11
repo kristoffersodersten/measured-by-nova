@@ -25,6 +25,13 @@ function manifest() {
     artifacts,
     artifactIdentities: Object.fromEntries(Object.entries(artifacts).map(([key, artifact]) => [key, { path: artifact, sha256: "c".repeat(64) }])),
     strategies: ["blender-orthographic-camera", "freestyle", "pdf-layout"],
+    outputClassification: {
+      purpose: "technical-permit-support",
+      authority: "locked-blender-orthographic-line-artifacts",
+      visualMode: "technical-line",
+      photorealismAuthoritative: false,
+      previewRenderAcceptedAsSourceOfTruth: false
+    },
     geometryMutationAllowed: false
   };
 }
@@ -59,7 +66,8 @@ describe("facade QA manifest gates", () => {
     [{ artifactIdentities: {} }, "required_view_identity_missing"],
     [{ strategies: ["export-stage-geometry-reconstruction"] }, "export_geometry_strategy_prohibited"],
     [{ artifacts: { ...manifest().artifacts, northPng: "../escaped.png" } }, "output_path_unsafe"],
-    [{ geometryMutationAllowed: true }, "geometry_mutation_declared"]
+    [{ geometryMutationAllowed: true }, "geometry_mutation_declared"],
+    [{ outputClassification: { purpose: "photorealistic-preview", authority: "preview-only" } }, "technical_output_classification_invalid"]
   ])("fails closed with machine-readable code %s", async (overrides, code) => {
     expect((await evaluate(overrides)).blocking.map((reason) => reason.code)).toContain(code);
   });

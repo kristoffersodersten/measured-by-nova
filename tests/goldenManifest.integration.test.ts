@@ -19,6 +19,13 @@ const ManifestSchema = z.object({
   projectId: z.string(),
   template: z.string(),
   productCategory: z.literal("measured-3d-visualization"),
+  outputClassification: z.object({
+    purpose: z.literal("technical-permit-support"),
+    authority: z.literal("locked-blender-orthographic-line-artifacts"),
+    visualMode: z.literal("technical-line"),
+    photorealismAuthoritative: z.literal(false),
+    previewRenderAcceptedAsSourceOfTruth: z.literal(false)
+  }).strict(),
   notCad: z.literal(true),
   geometryMutationAllowed: z.literal(false),
   sourceOfTruth: z.object({
@@ -27,6 +34,14 @@ const ManifestSchema = z.object({
     blenderGeometry: z.literal("only-renderable-truth"),
     exports: z.literal("formatting-only-no-geometry-reconstruction")
   }).strict(),
+  materialEvidence: z.array(z.object({
+    facade: z.string(),
+    material: z.string(),
+    colorNote: z.string(),
+    confidence: z.enum(["high", "medium", "low"]),
+    source: z.string(),
+    verified: z.boolean()
+  }).strict()),
   capabilityManifest: z.object({
     schemaVersion: z.literal(1),
     supportedTemplates: z.array(z.string())
@@ -291,6 +306,13 @@ describe("golden manifest integration", () => {
       productCategory: "measured-3d-visualization",
       notCad: true,
       geometryMutationAllowed: false,
+      outputClassification: {
+        purpose: "technical-permit-support",
+        authority: "locked-blender-orthographic-line-artifacts",
+        visualMode: "technical-line",
+        photorealismAuthoritative: false,
+        previewRenderAcceptedAsSourceOfTruth: false
+      },
       sourceOfTruth: {
         measurements: "primary",
         photos: "non-authoritative-reference-only",
@@ -324,6 +346,15 @@ describe("golden manifest integration", () => {
     expect(manifest.layout.measurements).toHaveLength(4);
     expect(manifest.layout.assumptions).toHaveLength(1);
     expect(manifest.layout.materialColorNotes).toContain("Observed/model metadata: white-painted-wood");
+    expect(manifest.materialEvidence.map((item: { material: string }) => item.material).sort()).toEqual([
+      "dark-roof",
+      "dark-stone",
+      "driveable-gravel-floor",
+      "white-painted-wood"
+    ]);
+    expect(manifest.materialEvidence.every((item: { source: string; confidence: string; verified: boolean }) =>
+      item.source === "photo_reference" && ["low", "medium"].includes(item.confidence) && item.verified
+    )).toBe(true);
     const exportOutputDir = path.join(outputDir, "run-a", "exports", template);
     const facadeQa = await evaluateFacadeQaManifest({
       manifest,

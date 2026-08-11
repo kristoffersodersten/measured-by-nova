@@ -12,6 +12,7 @@ export type FacadeQaReason = {
     | "export_geometry_strategy_prohibited"
     | "output_path_unsafe"
     | "geometry_mutation_declared"
+    | "technical_output_classification_invalid"
     | "source_geometry_mutated";
   message: string;
 };
@@ -89,6 +90,19 @@ export async function evaluateFacadeQaManifest(input: {
 
   if (manifest.geometryMutationAllowed !== false) {
     blocking.push({ code: "geometry_mutation_declared", message: "Facade export manifest must explicitly prohibit geometry mutation." });
+  }
+  const outputClassification = asRecord(manifest.outputClassification);
+  if (
+    outputClassification.purpose !== "technical-permit-support"
+    || outputClassification.authority !== "locked-blender-orthographic-line-artifacts"
+    || outputClassification.visualMode !== "technical-line"
+    || outputClassification.photorealismAuthoritative !== false
+    || outputClassification.previewRenderAcceptedAsSourceOfTruth !== false
+  ) {
+    blocking.push({
+      code: "technical_output_classification_invalid",
+      message: "Facade permit export must declare locked technical line artifacts as authority and reject preview renders as source of truth."
+    });
   }
   if (hashSourceProject(input.project) !== input.sourceProjectHashBefore) {
     blocking.push({ code: "source_geometry_mutated", message: "Project source geometry changed during facade export." });

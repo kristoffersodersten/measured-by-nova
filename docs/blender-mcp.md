@@ -900,6 +900,16 @@ The server treats missing output files as failure even if Blender exits with cod
 
 ## Validation
 
+### Technical permit versus preview authority
+
+Permit-support exports declare `outputClassification.purpose` as
+`technical-permit-support` and accept only locked Blender orthographic line
+artifacts as authority. Photorealistic output is explicitly non-authoritative
+and cannot be accepted as a permit source of truth. The same manifest carries
+`materialEvidence` separately, including the material note, provenance,
+confidence, and verification state; photo-derived appearance never changes
+measured geometry.
+
 Run:
 
 ```bash

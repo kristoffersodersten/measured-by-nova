@@ -535,6 +535,14 @@ export const DigitalViewingRenderManifestSchema = z.object({
   captureId: IdSchema,
   projectId: IdSchema,
   assetType: DigitalAssetTypeSchema,
+  outputClassification: z.object({
+    purpose: z.literal("photorealistic-preview"),
+    authority: z.literal("preview-only"),
+    previewOnly: z.literal(true),
+    permitSourceOfTruth: z.literal(false),
+    geometryAuthority: z.literal(false),
+    validationStatus: z.literal("not-separately-validated")
+  }).strict(),
   notGeometryAuthority: z.literal(true),
   sourceOfTruth: z.object({
     geometry: z.literal("verified-measurements"),
