@@ -167,3 +167,26 @@ A Measured UI surface is acceptable only when:
 - source measurements and photo evidence remain traceable
 - no output can be mistaken for more certain than it is
 - visual design remains consistent with NovaChat and MUE
+
+## Executable Surface Contract
+
+`src/uiSurfaceContract.ts` is the machine-readable boundary for the first UI.
+It requires exactly three ordered panels and at most five simultaneous visible
+states. Every visible state maps to exactly one topology class: system,
+execution, infrastructure, or human intervention.
+
+The contract fails closed when blocker causality, operator approval, execution
+geography, cost, latency, fallback reason, primary failure, data scope, or
+privacy boundary is hidden. If fallback occurred, both its reason and the
+primary failure are mandatory.
+
+Technical output is labeled `Verified technical output`. Preview output is
+always visibly labeled `Photorealistic preview - not verified truth`, with no
+permit or geometry authority. The preview label must appear in a visible
+workspace state; it cannot exist only in hidden metadata.
+
+Validation:
+
+```bash
+pnpm exec vitest run tests/uiSurfaceContract.test.ts
+```
