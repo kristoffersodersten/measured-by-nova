@@ -35,6 +35,7 @@ Photos and AI-derived estimates never override measured dimensions.
 | `elements` | Generated parametric geometry records. |
 | `validation` | Deterministic checks and warnings. |
 | `modelLock` | Human-review lock required for MVP exports. |
+| `viewRegistry` | Deterministic named orthographic cameras used by facade exports. |
 | `sourceOfTruthPolicy` | Non-negotiable accuracy and authority rules. |
 | `artifacts` | Generated local output paths. |
 
@@ -86,6 +87,14 @@ Permit-support exports require the complete lock and recompute both hashes befor
 Blender runs. A changed or missing Blender file and any changed project source
 state fail closed with machine-readable lock errors. Export manifests include
 the complete lock metadata.
+
+## Orthographic View Registry
+
+`viewRegistry` persists each named `plan`, `north`, `south`, `east`, `west`, or
+`section_a_a` camera with its transform, target, up vector, orthographic scale,
+clipping range, and `MeasuredGeometry` target collection. Definitions are
+canonically ordered and bound by `registryHash`. Facade export requires all four
+cardinal views and rejects missing or changed registry data before Blender runs.
 
 Model-lock and export requests also carry the execution contract defined in
 `docs/namaka-alignment.md`. Successful results include deterministic

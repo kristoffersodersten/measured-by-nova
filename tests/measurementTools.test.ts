@@ -14,6 +14,10 @@ import {
 } from "../src/digitalViewingContracts.js";
 import { registerMeasurementTools } from "../src/measurementTools.js";
 import type { ExecutionIntent, ExecutionOperation } from "../src/executionGate.js";
+import { MeasurementProjectSchema } from "../src/measurementContracts.js";
+import { buildModelLock } from "../src/modelLock.js";
+import { materializeProfiles } from "../src/profileGenerator.js";
+import { buildOrthographicViewRegistry } from "../src/viewRegistry.js";
 
 function executionIntent(operation: ExecutionOperation, writeScope: ExecutionIntent["writeScope"]): ExecutionIntent {
   return {
@@ -161,6 +165,43 @@ function makeToolHarness(outputDir: string): Map<string, RegisteredTool> {
 }
 
 describe("measurement MCP digital viewing tools", () => {
+  it("blocks facade export before Blender when a required registry view is missing", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
+    const projectDir = path.join(outputDir, "measurement-projects", "view-fixture");
+    const modelArtifact = "measurement-projects/view-fixture/artifacts/view-fixture.blend";
+    await mkdir(path.join(projectDir, "artifacts"), { recursive: true });
+    await writeFile(path.join(outputDir, modelArtifact), "reviewed blender bytes");
+    const materialized = materializeProfiles(MeasurementProjectSchema.parse({
+      schemaVersion: 1,
+      projectId: "view-fixture",
+      unit: "mm",
+      photos: ["north", "south", "east", "west"].map((view) => ({ path: `photos/${view}.jpg`, view, role: "reference", confidence: "high" })),
+      profiles: [{
+        id: "profile-carport",
+        profile: "carport",
+        confidence: "high",
+        parameters: { widthMm: 7676, depthMm: 6240, roofSlopePercent: 3.7, westHighSideHeightMm: 3455, eastLowSideHeightMm: 3174, steps: [], claddingDirection: "horizontal" }
+      }],
+      artifacts: { blend: modelArtifact }
+    }));
+    const projectWithViews = { ...materialized, viewRegistry: buildOrthographicViewRegistry(materialized.elements, ["north", "south", "east"]) };
+    const modelLock = await buildModelLock({ outputDir, timeoutMs: 120_000 }, projectWithViews, {
+      lockedAt: "2026-08-11T07:00:00.000Z",
+      lockedBy: "reviewer",
+      reason: "Reviewed"
+    });
+    await writeFile(path.join(projectDir, "project.json"), JSON.stringify({ ...projectWithViews, modelLock }), "utf8");
+
+    const result = await makeToolHarness(outputDir).get("export_facade_completion_pack")!.handler({
+      projectId: "view-fixture",
+      executionIntent: executionIntent("export-facade-pack", ["project-state", "blender-output", "manifest"])
+    });
+    const body = JSON.parse(result.content[0].text) as { error?: { code: string; details?: { blocking?: Array<{ code: string }> } } };
+    expect(result.isError).toBe(true);
+    expect(body.error?.code).toBe("view_registry_invalid");
+    expect(body.error?.details?.blocking?.map((reason) => reason.code)).toEqual(["required_view_missing"]);
+  });
+
   it("rejects export execution before reading project state when intent lacks required scope", async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
     const tool = makeToolHarness(outputDir).get("export_model");

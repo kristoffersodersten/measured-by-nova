@@ -10,6 +10,7 @@ import { DefaultCapabilityManifest } from "../src/capabilityManifest.js";
 import { buildDigitalViewingAssetBundleManifest, buildDigitalViewingBlenderRenderJob, buildDigitalViewingRenderManifest, DigitalViewingCaptureSchema } from "../src/digitalViewingContracts.js";
 import { MeasurementProjectSchema } from "../src/measurementContracts.js";
 import { materializeProfiles } from "../src/profileGenerator.js";
+import { buildOrthographicViewRegistry } from "../src/viewRegistry.js";
 
 const ManifestSchema = z.object({
   schemaVersion: z.literal(1),
@@ -220,7 +221,11 @@ describe("golden manifest integration", () => {
   it("exports a deterministic measured-visualization manifest without mutating project geometry", async () => {
     const outputDir = await mkdtemp(path.join(os.tmpdir(), "nova-measured-golden-"));
     const fixtureRaw: unknown = JSON.parse(await readFile("fixtures/synthetic-carport-project.json", "utf8"));
-    const project = materializeProfiles(MeasurementProjectSchema.parse(fixtureRaw));
+    const materializedProject = materializeProfiles(MeasurementProjectSchema.parse(fixtureRaw));
+    const project = {
+      ...materializedProject,
+      viewRegistry: buildOrthographicViewRegistry(materializedProject.elements, ["plan", "north", "south", "east", "west", "section_a_a"])
+    };
     const geometryBefore = hashGeometry(project);
     const template = "gothenburg-permit";
 
@@ -237,6 +242,7 @@ describe("golden manifest integration", () => {
         options: {
           scale: "1:100",
           views: ["north", "south", "east", "west"],
+          viewRegistry: project.viewRegistry,
           lockedModel: project.modelLock,
           capabilityManifest: DefaultCapabilityManifest,
           strategies: ExportStrategies
@@ -275,6 +281,7 @@ describe("golden manifest integration", () => {
       },
       strategies: ExportStrategies
     });
+    expect(manifest.viewRegistry).toEqual(project.viewRegistry);
     expect(manifest.capabilityManifest.supportedTemplates).toContain("gothenburg-permit");
     expect(Object.keys(manifest.artifacts)).toEqual([
       "eastPng",
