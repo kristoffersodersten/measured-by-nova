@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ExecutionIntentSchema } from "./executionGate.js";
 
 export const ConfidenceSchema = z.enum(["high", "medium", "low"]);
 export type Confidence = z.infer<typeof ConfidenceSchema>;
@@ -187,19 +188,22 @@ export const CreateParametricProfileSchema = ToolEnvelopeSchema.extend({ profile
 export const GenerateMeasuredModelSchema = ToolEnvelopeSchema.extend({ outputBlend: RelativePathSchema.optional() }).strict();
 export const ValidateModelSchema = ToolEnvelopeSchema.extend({ checks: z.array(z.enum(["known_dimensions", "photo_orientation", "reprojection_error"])).min(1) }).strict();
 export const GenerateElevationViewsSchema = ToolEnvelopeSchema.extend({ views: z.array(z.enum(["plan", "north", "south", "east", "west", "section_a_a"])).min(1) }).strict();
-export const ExportMeasuredModelSchema = ToolEnvelopeSchema.extend({ formats: z.array(z.enum(["blend", "glb", "obj"])).min(1) }).strict();
-export const ExportDimensionedDrawingsSchema = ToolEnvelopeSchema.extend({ outputPath: RelativePathSchema, scale: z.string().min(1).max(40), includeConfidenceLegend: z.boolean().default(true) }).strict();
+export const ExportMeasuredModelSchema = ToolEnvelopeSchema.extend({ executionIntent: ExecutionIntentSchema, formats: z.array(z.enum(["blend", "glb", "obj"])).min(1) }).strict();
+export const ExportDimensionedDrawingsSchema = ToolEnvelopeSchema.extend({ executionIntent: ExecutionIntentSchema, outputPath: RelativePathSchema, scale: z.string().min(1).max(40), includeConfidenceLegend: z.boolean().default(true) }).strict();
 export const LockModelForExportSchema = ToolEnvelopeSchema.extend({
+  executionIntent: ExecutionIntentSchema,
   lockedBy: z.string().min(1).max(120),
   reason: z.string().min(1).max(500)
 }).strict();
 export const ExportFacadeCompletionPackSchema = ToolEnvelopeSchema.extend({
+  executionIntent: ExecutionIntentSchema,
   template: z.enum(["permit-facade-pack", "swedish-municipality", "gothenburg-permit"]).default("permit-facade-pack"),
   outputDir: RelativePathSchema.optional(),
   scale: z.string().min(1).max(40).default("1:100"),
   views: z.array(z.enum(["north", "south", "east", "west"])).length(4).default(["north", "south", "east", "west"])
 }).strict();
 export const ExportProjectTemplateSchema = ToolEnvelopeSchema.extend({
+  executionIntent: ExecutionIntentSchema,
   template: ExportTemplateSchema,
   outputDir: RelativePathSchema.optional(),
   options: z.record(z.unknown()).default({})

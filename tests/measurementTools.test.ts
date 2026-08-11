@@ -13,6 +13,20 @@ import {
   DigitalViewingDeliveryPackageManifestSchema
 } from "../src/digitalViewingContracts.js";
 import { registerMeasurementTools } from "../src/measurementTools.js";
+import type { ExecutionIntent, ExecutionOperation } from "../src/executionGate.js";
+
+function executionIntent(operation: ExecutionOperation, writeScope: ExecutionIntent["writeScope"]): ExecutionIntent {
+  return {
+    intentId: `intent-${operation}`,
+    operation,
+    objective: `Execute ${operation} from reviewed local project state`,
+    writeScope,
+    forbiddenScope: ["source-measurements", "locked-geometry"],
+    selectedToolPath: "mcp:nova-measured",
+    acceptanceChecks: ["schema", "quality-gate", "manifest"],
+    executionPolicy: { locality: "local-only", telemetry: false, fallback: "none", geometryMutation: false }
+  };
+}
 
 type RegisteredTool = {
   description: string;
@@ -147,6 +161,89 @@ function makeToolHarness(outputDir: string): Map<string, RegisteredTool> {
 }
 
 describe("measurement MCP digital viewing tools", () => {
+  it("rejects export execution before reading project state when intent lacks required scope", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
+    const tool = makeToolHarness(outputDir).get("export_model");
+
+    const result = await tool!.handler({
+      projectId: "missing-project",
+      executionIntent: executionIntent("export-model", ["manifest"]),
+      formats: ["glb"]
+    });
+    const body = JSON.parse(result.content[0].text) as {
+      error?: { code: string; details?: { blocking?: Array<{ code: string }> } };
+    };
+
+    expect(result.isError).toBe(true);
+    expect(body.error?.code).toBe("execution_intent_rejected");
+    expect(body.error?.details?.blocking?.map((reason) => reason.code)).toEqual(["intent_write_scope_missing"]);
+  });
+
+  it("rejects model-lock execution before reading project state when intent violates locality", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
+    const tool = makeToolHarness(outputDir).get("lock_model_for_export");
+    const invalidIntent = executionIntent("lock-model", ["project-state", "manifest"]);
+    invalidIntent.executionPolicy.locality = "remote";
+
+    const result = await tool!.handler({
+      projectId: "missing-project",
+      executionIntent: invalidIntent,
+      lockedBy: "reviewer",
+      reason: "Reviewed measured geometry"
+    });
+    const body = JSON.parse(result.content[0].text) as {
+      error?: { code: string; details?: { blocking?: Array<{ code: string }> } };
+    };
+
+    expect(result.isError).toBe(true);
+    expect(body.error?.code).toBe("execution_intent_rejected");
+    expect(body.error?.details?.blocking?.map((reason) => reason.code)).toEqual(["intent_locality_violation"]);
+  });
+
+  it("emits deterministic intent/action evidence after a successful model lock", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
+    const projectDir = path.join(outputDir, "measurement-projects", "lock-fixture");
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(path.join(projectDir, "project.json"), JSON.stringify({
+      schemaVersion: 1,
+      projectId: "lock-fixture",
+      unit: "mm",
+      photos: ["north", "south", "east", "west"].map((view) => ({ path: `photos/${view}.jpg`, view, role: "reference", confidence: "high" })),
+      profiles: [{
+        id: "profile-carport",
+        profile: "carport",
+        confidence: "high",
+        parameters: {
+          widthMm: 7676,
+          depthMm: 6240,
+          roofSlopePercent: 3.7,
+          westHighSideHeightMm: 3455,
+          eastLowSideHeightMm: 3174,
+          steps: [],
+          claddingDirection: "horizontal"
+        }
+      }]
+    }), "utf8");
+    const tool = makeToolHarness(outputDir).get("lock_model_for_export");
+
+    const result = await tool!.handler({
+      projectId: "lock-fixture",
+      executionIntent: executionIntent("lock-model", ["project-state", "manifest"]),
+      lockedBy: "reviewer",
+      reason: "Reviewed measured geometry"
+    });
+    const body = JSON.parse(result.content[0].text) as {
+      data?: { execution?: { intent: { intentId: string }; action: { intentHash: string; manifestHash: string; changedArtifacts: string[]; executionPolicy: unknown } } };
+    };
+
+    expect(result.isError).toBe(false);
+    expect(body.data?.execution?.intent.intentId).toBe("intent-lock-model");
+    expect(body.data?.execution?.action.intentHash).toHaveLength(64);
+    expect(body.data?.execution?.action.manifestHash).toHaveLength(64);
+    expect(body.data?.execution?.action.changedArtifacts).toEqual(["measurement-projects/lock-fixture/project.json"]);
+    expect(body.data?.execution?.action.executionPolicy).toEqual({ locality: "local-only", telemetry: false, fallback: "none", geometryMutation: false });
+  });
+
   it("returns machine-readable capture guide checklists for UI capture flows", async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
     const tools = makeToolHarness(outputDir);
