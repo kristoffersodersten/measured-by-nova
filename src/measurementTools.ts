@@ -42,7 +42,8 @@ import {
   ValidateDigitalViewingCapturePresetInputSchema
 } from "./digitalViewingContracts.js";
 import { materializeProfiles } from "./profileGenerator.js";
-import { buildModelLock, validateModelLock } from "./modelLock.js";
+import { evaluateFacadeQaManifest } from "./facadeQa.js";
+import { buildModelLock, hashSourceProject, validateModelLock } from "./modelLock.js";
 import { buildOrthographicViewRegistry, validateRequiredViews } from "./viewRegistry.js";
 import { appendRequestLog, fail, ok, readProject, requestId, writeProject } from "./projectStore.js";
 import {
@@ -331,6 +332,7 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     }
     const outputDir = payload.outputDir ?? path.join("measurement-projects", payload.projectId, "exports", payload.template);
     const outputBlend = path.join(outputDir, `${payload.projectId}-${payload.template}.blend`);
+    const sourceProjectHashBefore = hashSourceProject(project);
     const result = await runBlenderJob(config, {
       mode: "measurement_project",
       operation: "export_template",
@@ -339,12 +341,26 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
       templateOutputDir: safeOutputPath(config.outputDir, outputDir),
       options: { scale: payload.scale, views: payload.views, viewRegistry: project.viewRegistry, lockedModel: project.modelLock, capabilityManifest: DefaultCapabilityManifest, strategies: PermitExportStrategies }
     }, outputBlend);
+    if (!result.ok) {
+      return fail(req, "blender_export_failed", "Blender did not produce a valid facade-completion export.", [result.stderr], { blender: result });
+    }
+    const exportOutputDir = safeOutputPath(config.outputDir, outputDir);
+    let exportManifest: unknown;
+    try {
+      exportManifest = JSON.parse(await readFile(path.join(exportOutputDir, "manifest.json"), "utf8")) as unknown;
+    } catch {
+      return fail(req, "export_manifest_missing", "Facade export did not produce a readable manifest.", [], { blocking: [{ code: "export_manifest_missing", message: "Expected manifest.json is missing or invalid." }] });
+    }
+    const qa = await evaluateFacadeQaManifest({ manifest: exportManifest, project, requiredViews: payload.views, exportOutputDir, sourceProjectHashBefore });
+    if (!qa.ok) {
+      return fail(req, "facade_qa_failed", "Facade export manifest failed the pixel-perfect contract gates.", qa.blocking.map((reason) => `${reason.code}: ${reason.message}`), { blocking: qa.blocking, visualDiff: qa.visualDiff });
+    }
     const artifactKey = `facadeCompletionPack:${payload.template}`;
     const next = { ...project, artifacts: { ...project.artifacts, [artifactKey]: safeOutputPath(config.outputDir, outputDir) } };
     await writeProject(config, next);
     await appendRequestLog(config, payload.projectId, req, "export_facade_completion_pack", payload);
     const executionAction = exportActionEvidence(payload.executionIntent, result, outputDir, { template: payload.template, outputDir, qualityGate: gate, capability, blender: result });
-    return ok(req, { blender: result, template: payload.template, outputDir: next.artifacts[artifactKey], qualityGate: gate, capability, execution: { intent: payload.executionIntent, action: executionAction } }, exportTemplateWarnings(payload.template));
+    return ok(req, { blender: result, template: payload.template, outputDir: next.artifacts[artifactKey], qualityGate: gate, capability, facadeQa: qa, execution: { intent: payload.executionIntent, action: executionAction } }, exportTemplateWarnings(payload.template));
   });
 
   register(server, "export_project_template", "Export a recipient-specific measured visualization package without changing or reconstructing project geometry.", ExportProjectTemplateSchema, async (input) => {

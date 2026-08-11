@@ -52,6 +52,16 @@ Minimum tests:
 - Golden manifest test across repeated Blender exports with identical input and capability manifest.
 - Bridge tests for orthographic view artifact names.
 
+## Facade export manifest gate
+
+The post-Blender facade QA gate compares the output manifest with the reviewed
+model hash, requires identity-backed north/south/east/west views, rejects
+export-stage geometry reconstruction, constrains every artifact path to the
+declared export directory, and verifies that the project source hash did not
+change during export. Every rejection has a stable machine-readable code.
+Pixel/PDF visual diff remains optional evidence and is explicitly separate from
+contract truth.
+
 Current public fixture:
 
 - `fixtures/synthetic-carport-project.json`
