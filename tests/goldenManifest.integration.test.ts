@@ -30,7 +30,19 @@ const ManifestSchema = z.object({
     supportedTemplates: z.array(z.string())
   }).passthrough(),
   strategies: z.array(z.string()),
-  artifacts: z.record(z.string())
+  artifacts: z.record(z.string()),
+  layout: z.object({
+    paper: z.object({ format: z.literal("A3"), orientation: z.literal("landscape"), widthMm: z.number(), heightMm: z.number() }),
+    scale: z.string(),
+    geometryMutationAllowed: z.literal(false),
+    consumes: z.string(),
+    markLine: z.object({ role: z.string() }).passthrough(),
+    sourceStatement: z.string(),
+    includedViews: z.array(z.object({ name: z.string(), sha256: z.string() }).passthrough()),
+    measurements: z.array(z.unknown()),
+    assumptions: z.array(z.unknown()),
+    materialColorNotes: z.array(z.string())
+  }).passthrough()
 }).passthrough();
 
 const ExportStrategies = ["parametric-profile", "blender-orthographic-camera", "freestyle", "manifest", "pdf-layout", "svg-layout", "png-render"];
@@ -290,6 +302,19 @@ describe("golden manifest integration", () => {
       pdfRole: "layout-only",
       rendererTolerance: { metric: "pixel-difference-ratio", maximum: 0.005 }
     });
+    expect(manifest.layout).toMatchObject({
+      paper: { format: "A3", orientation: "landscape", widthMm: 420, heightMm: 297 },
+      scale: "1:100",
+      geometryMutationAllowed: false,
+      consumes: "locked-blender-view-artifacts-and-project-metadata-only",
+      markLine: { role: "layout-reference-only" },
+      sourceStatement: "Measured Blender visualization - not CAD, BIM or survey output"
+    });
+    expect(manifest.layout.includedViews.map((view: { name: string }) => view.name)).toEqual(["north", "south", "east", "west"]);
+    expect(manifest.layout.includedViews.every((view: { sha256: string }) => /^[a-f0-9]{64}$/.test(view.sha256))).toBe(true);
+    expect(manifest.layout.measurements).toHaveLength(4);
+    expect(manifest.layout.assumptions).toHaveLength(1);
+    expect(manifest.layout.materialColorNotes).toContain("Observed/model metadata: white-painted-wood");
     const artifactIdentities = manifest.artifactIdentities as Record<string, unknown>;
     expect(Object.values(artifactIdentities).every((identity: unknown) => {
       const value = identity as { sizeBytes: number; sha256: string; hashScope: string };
@@ -300,6 +325,12 @@ describe("golden manifest integration", () => {
     expect(svg).toContain('"geometryReconstruction":false');
     expect(svg).toContain(`href="${manifest.artifacts.northPng}"`);
     expect(svg).not.toContain("<line");
+    const pdf = await readFile(path.join(outputDir, "run-a", "exports", template, manifest.artifacts.pdf), "latin1");
+    expect(pdf).toContain("/MediaBox [0 0 1190.55 841.89]");
+    expect(pdf).toContain("FASAD NORR / NORTH");
+    expect(pdf.match(/\/Subtype \/Image/g)).toHaveLength(4);
+    expect(pdf).toContain("MARKLINJE / EXISTING GROUND REFERENCE");
+    expect(pdf).toContain("Measured Blender visualization - not CAD, BIM or survey output");
     expect(manifest.capabilityManifest.supportedTemplates).toContain("gothenburg-permit");
     expect(Object.keys(manifest.artifacts)).toEqual([
       "eastPng",
