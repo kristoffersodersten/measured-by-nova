@@ -61,7 +61,7 @@ jobs:
           node -e 'const fs=require("node:fs"); fs.writeFileSync("evidence/ci-runtime.json", JSON.stringify({schemaVersion:1, commit:process.env.GITHUB_SHA, runId:process.env.GITHUB_RUN_ID, runAttempt:process.env.GITHUB_RUN_ATTEMPT, runnerImage:process.env.ImageOS, node:process.version, pnpm:"10.33.0", blenderSource:"ubuntu-24.04-apt"}, null, 2)+"\n")'
           if command -v blender >/dev/null 2>&1; then blender --version > evidence/blender-version.txt; else echo "unavailable" > evidence/blender-version.txt; fi
           apt-cache policy blender > evidence/blender-package-policy.txt
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1 (Node 24)
         if: always()
         with:
           name: measured-runtime-evidence-${{ github.sha }}
