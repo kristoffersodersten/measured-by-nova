@@ -79,7 +79,7 @@ See [MVP product contract](docs/mvp.md).
 - Use deterministic explicit-anchor planar alignment and source-backed Blender
   projection today; future local photogrammetry may propose anchors but cannot
   bypass provenance, uncertainty, geometry-authority, or review gates.
-- Export `.blend`, `.glb`, `.obj`, orthographic elevation views, permit-support PDFs, and future real-time engine targets.
+- Export validated `.blend`, `.glb`, and `.obj` artifacts from the exact current model lock, plus orthographic elevation views, permit-support PDFs, and future real-time engine targets.
 - Keep legacy 2D sketch and primitive 3D tools for low-level utility work.
 - Run explicit Blender Python only as an unsafe opt-in fallback.
 - Validate all tool inputs with typed Zod contracts.

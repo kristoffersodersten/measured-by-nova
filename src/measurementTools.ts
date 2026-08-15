@@ -279,11 +279,38 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
       return failExecutionIntent(req, executionGate);
     }
     const project = materializeProfiles(await readProject(config, payload.projectId));
+    const lockValidation = await validateModelLock(config, project);
+    if (!lockValidation.ok || !project.modelLock.modelArtifact) {
+      return fail(req, "model_lock_invalid", "Portable model export requires the exact unchanged reviewed Blender model.", lockValidation.blocking.map((reason) => `${reason.code}: ${reason.message}`), { blocking: lockValidation.blocking });
+    }
     const outputBlend = path.join("measurement-projects", payload.projectId, "artifacts", `${payload.projectId}-export.blend`);
-    const result = await runBlenderJob(config, { mode: "measurement_project", operation: "export_model", project, formats: payload.formats }, outputBlend);
-    await appendRequestLog(config, payload.projectId, req, "export_model", payload);
-    const executionAction = exportActionEvidence(payload.executionIntent, result, outputBlend, { formats: payload.formats, blender: result });
-    return ok(req, { blender: result, formats: payload.formats, execution: { intent: payload.executionIntent, action: executionAction } });
+    const artifactPaths = portableExportPaths(payload.projectId, payload.formats, outputBlend);
+    if ((await Promise.all(artifactPaths.map((artifact) => pathExists(safeOutputPath(config.outputDir, artifact.path))))).some(Boolean)) {
+      return fail(req, "export_output_exists", "Portable export refuses to overwrite an existing artifact.");
+    }
+    const result = await runBlenderJob(config, { mode: "measurement_project", operation: "export_model", project, formats: payload.formats, sourceBlendPath: project.modelLock.modelArtifact }, outputBlend);
+    if (!result.ok) {
+      await Promise.all(artifactPaths.map((artifact) => rm(safeOutputPath(config.outputDir, artifact.path), { force: true })));
+      return fail(req, "portable_export_failed", "Blender could not export the locked model; partial artifacts were removed.", [result.stderr]);
+    }
+    let artifacts;
+    try {
+      artifacts = await Promise.all(artifactPaths.map((artifact) => validatePortableExportArtifact(config.outputDir, artifact)));
+    } catch (error) {
+      await Promise.all(artifactPaths.map((artifact) => rm(safeOutputPath(config.outputDir, artifact.path), { force: true })));
+      return fail(req, "portable_export_artifact_invalid", error instanceof Error ? error.message : String(error), ["All partial portable-export artifacts were removed."]);
+    }
+    await appendRequestLog(config, payload.projectId, req, "export_model", { ...payload, sourceBlendPath: project.modelLock.modelArtifact, artifacts });
+    const executionAction = buildExecutionActionEvidence(payload.executionIntent, {
+      changedArtifacts: artifacts.map((artifact) => artifact.path),
+      verificationResults: [
+        { check: "schema", ok: true, evidence: "Portable export input and execution intent matched strict schemas." },
+        { check: "quality-gate", ok: true, evidence: "Exact model-lock source and Blender execution passed without fallback." },
+        { check: "manifest", ok: true, evidence: "Every requested artifact passed type, size, and SHA-256 validation." }
+      ],
+      manifest: { projectId: payload.projectId, sourceBlendPath: project.modelLock.modelArtifact, modelHash: project.modelLock.modelHash, formats: payload.formats, artifacts }
+    });
+    return ok(req, { blender: result, formats: payload.formats, sourceBlendPath: project.modelLock.modelArtifact, artifacts, execution: { intent: payload.executionIntent, action: executionAction } });
   });
 
   register(server, "export_dimensioned_drawings", "Generate a permit-oriented visualization PDF with dimension annotations, scale bars, and a confidence legend.", ExportDimensionedDrawingsSchema, async (input) => {
@@ -866,6 +893,33 @@ async function pathExists(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+type PortableExportArtifact = { format: "blend" | "glb" | "obj"; path: string };
+
+function portableExportPaths(projectId: string, formats: Array<"blend" | "glb" | "obj">, outputBlend: string): PortableExportArtifact[] {
+  const base = path.dirname(outputBlend);
+  const requested = new Set(formats);
+  requested.add("blend");
+  return (["blend", "glb", "obj"] as const)
+    .filter((format) => requested.has(format))
+    .map((format) => ({ format, path: format === "blend" ? outputBlend : path.join(base, `${projectId}.${format}`) }));
+}
+
+async function validatePortableExportArtifact(outputDir: string, artifact: PortableExportArtifact) {
+  const artifactPath = safeOutputPath(outputDir, artifact.path);
+  const contents = await readFile(artifactPath);
+  if (contents.byteLength === 0) throw new Error(`Portable ${artifact.format} artifact is empty: ${artifact.path}`);
+  if (artifact.format === "blend" && contents.subarray(0, 7).toString("ascii") !== "BLENDER") {
+    throw new Error(`Portable blend artifact has an invalid Blender header: ${artifact.path}`);
+  }
+  if (artifact.format === "glb" && contents.subarray(0, 4).toString("ascii") !== "glTF") {
+    throw new Error(`Portable GLB artifact has an invalid binary glTF header: ${artifact.path}`);
+  }
+  if (artifact.format === "obj" && !/(^|\n)v\s+-?\d/m.test(contents.toString("utf8"))) {
+    throw new Error(`Portable OBJ artifact contains no vertex records: ${artifact.path}`);
+  }
+  return { ...artifact, sizeBytes: contents.byteLength, sha256: createHash("sha256").update(contents).digest("hex") };
 }
 
 async function assertExistingPathWithinRoot(root: string, filePath: string): Promise<void> {
