@@ -157,7 +157,8 @@ export type ParametricElement = z.infer<typeof ParametricElementSchema>;
 export const ValidationReportSchema = z.object({
   ok: z.boolean().default(true),
   checks: z.array(z.object({ name: z.string(), ok: z.boolean(), message: z.string(), confidence: ConfidenceSchema.optional() }).strict()).default([]),
-  warnings: z.array(z.string()).default([])
+  warnings: z.array(z.string()).default([]),
+  sourceProjectHash: z.string().length(64).regex(/^[a-f0-9]+$/).optional()
 }).strict();
 export type ValidationReport = z.infer<typeof ValidationReportSchema>;
 

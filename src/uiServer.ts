@@ -3,13 +3,12 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildExecutableWorkspace, renderWorkspaceHtml, UiRuntimeConfigSchema, type UiRuntimeConfig } from "./uiWorkspace.js";
+import { listUiProjects, loadUiProjectWorkspace, writeUiDecision } from "./uiProjectState.js";
 
 export function startUiServer(config: UiRuntimeConfig) {
   const parsed = UiRuntimeConfigSchema.parse(config);
-  const surface = buildExecutableWorkspace(parsed);
-  let heldBy: string | null = null;
   const server = createServer((request, response) => {
-    void handleRequest(request, response, surface, () => heldBy, (actor) => { heldBy = actor; }).catch(() => {
+    void handleRequest(request, response, parsed).catch(() => {
       if (!response.headersSent) send(response, 500, "application/json", JSON.stringify({ error: "workspace_request_failed" }));
       else response.destroy();
     });
@@ -18,19 +17,34 @@ export function startUiServer(config: UiRuntimeConfig) {
   return server;
 }
 
-async function handleRequest(request: IncomingMessage, response: ServerResponse, surface: ReturnType<typeof buildExecutableWorkspace>, getHeldBy: () => string | null, setHeldBy: (actor: string) => void): Promise<void> {
+async function handleRequest(request: IncomingMessage, response: ServerResponse, config: UiRuntimeConfig): Promise<void> {
   setSecurityHeaders(response);
   if (!validLoopbackHost(request)) return send(response, 421, "application/json", JSON.stringify({ error: "workspace_host_forbidden" }));
-  if (request.method === "GET" && request.url === "/") return send(response, 200, "text/html; charset=utf-8", renderWorkspaceHtml(surface, getHeldBy()));
+  const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
+  if (request.method === "GET" && url.pathname === "/") {
+    const projectId = url.searchParams.get("projectId");
+    if (!projectId) return send(response, 200, "text/html; charset=utf-8", renderWorkspaceHtml(buildExecutableWorkspace(config)));
+    try { const workspace = await loadUiProjectWorkspace(config, projectId); return send(response, 200, "text/html; charset=utf-8", renderWorkspaceHtml(workspace.surface, workspace.operatorDecision?.actor ?? null)); }
+    catch (error) { return send(response, 404, "application/json", JSON.stringify({ error: workspaceError(error) })); }
+  }
   if (request.method === "GET" && request.url === "/workspace.js") return send(response, 200, "text/javascript; charset=utf-8", workspaceScript);
-  if (request.method === "GET" && request.url === "/api/workspace") { const heldBy = getHeldBy(); return send(response, 200, "application/json", JSON.stringify({ surface, operatorDecision: heldBy ? { decision: "hold", actor: heldBy } : null })); }
+  if (request.method === "GET" && url.pathname === "/api/projects") {
+    try { return send(response, 200, "application/json", JSON.stringify({ projects: await listUiProjects(config) })); }
+    catch (error) { return send(response, 409, "application/json", JSON.stringify({ error: workspaceError(error) })); }
+  }
+  if (request.method === "GET" && url.pathname === "/api/workspace") {
+    const projectId = url.searchParams.get("projectId");
+    if (!projectId) return send(response, 400, "application/json", JSON.stringify({ error: "workspace_project_required" }));
+    try { return send(response, 200, "application/json", JSON.stringify(await loadUiProjectWorkspace(config, projectId))); }
+    catch (error) { return send(response, 404, "application/json", JSON.stringify({ error: workspaceError(error) })); }
+  }
   if (request.method === "POST" && request.url === "/api/operator-decision") {
     if (!sameOrigin(request)) return send(response, 403, "application/json", JSON.stringify({ error: "operator_decision_origin_forbidden" }));
     try {
       const body = await readJson(request);
-      if (body.decision !== "hold" || body.actor !== "operator") return send(response, 422, "application/json", JSON.stringify({ error: "operator_decision_invalid" }));
-      setHeldBy(body.actor);
-      return send(response, 200, "application/json", JSON.stringify({ ok: true, decision: "hold", actor: body.actor }));
+      if ((body.decision !== "hold" && body.decision !== "release") || body.actor !== "operator" || typeof body.projectId !== "string") return send(response, 422, "application/json", JSON.stringify({ error: "operator_decision_invalid" }));
+      const decision = await writeUiDecision(config, body.projectId, body.decision);
+      return send(response, 200, "application/json", JSON.stringify({ ok: true, operatorDecision: decision }));
     } catch (error) {
       const message = error instanceof Error ? error.message : "operator_decision_invalid_json";
       return send(response, message === "operator_decision_body_too_large" ? 413 : 400, "application/json", JSON.stringify({ error: message }));
@@ -44,8 +58,9 @@ function setSecurityHeaders(response: ServerResponse): void {
   response.setHeader("referrer-policy", "no-referrer"); response.setHeader("x-content-type-options", "nosniff"); response.setHeader("cache-control", "no-store");
 }
 
-const workspaceScript = `"use strict";document.getElementById("manual-override").addEventListener("click",async()=>{const output=document.getElementById("decision");try{const response=await fetch("/api/operator-decision",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({decision:"hold",actor:"operator"})});const result=await response.json();output.textContent=response.ok?"Delivery held by operator.":result.error;}catch{output.textContent="Decision failed; delivery state unchanged."}});`;
+const workspaceScript = `"use strict";document.getElementById("manual-override").addEventListener("click",async()=>{const output=document.getElementById("decision");const projectId=new URLSearchParams(location.search).get("projectId");if(!projectId){output.textContent="Select an explicit project before holding delivery.";return;}try{const response=await fetch("/api/operator-decision",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({decision:"hold",actor:"operator",projectId})});const result=await response.json();output.textContent=response.ok?"Delivery held by operator.":result.error;}catch{output.textContent="Decision failed; delivery state unchanged."}});`;
 function send(response: ServerResponse, status: number, type: string, body: string): void { response.statusCode = status; response.setHeader("content-type", type); response.end(body); }
+function workspaceError(error: unknown): string { return error instanceof Error && /^workspace_[a-z_]+$/.test(error.message) ? error.message : "workspace_project_unavailable"; }
 function validLoopbackHost(request: IncomingMessage): boolean {
   const localPort = request.socket.localPort;
   return localPort !== undefined && request.headers.host === `127.0.0.1:${localPort}`;
@@ -71,7 +86,7 @@ async function readJson(request: IncomingMessage): Promise<Record<string, unknow
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    const server = startUiServer({ host: "127.0.0.1", port: Number(process.env.MEASURED_UI_PORT ?? "4173"), environmentTruth: { provider: process.env.MEASURED_UI_PROVIDER ?? "user-owned runtime", engine: process.env.MEASURED_UI_ENGINE ?? "Blender", endpoint: process.env.MEASURED_UI_ENDPOINT ?? "local-process", executionGeography: (process.env.MEASURED_UI_GEOGRAPHY ?? "local") as UiRuntimeConfig["environmentTruth"]["executionGeography"], owner: process.env.MEASURED_UI_OWNER ?? "user-local-runtime", costClass: (process.env.MEASURED_UI_COST ?? "local-compute") as UiRuntimeConfig["environmentTruth"]["costClass"], latencyClass: (process.env.MEASURED_UI_LATENCY ?? "interactive") as UiRuntimeConfig["environmentTruth"]["latencyClass"], fallbackUsed: false, dataScope: ["workspace-state", "operator-decision"], privacyBoundary: process.env.MEASURED_UI_PRIVACY ?? "loopback-only; no telemetry", operatorApprovalRequired: true, auditNotes: ["Execution truth is supplied explicitly at process start."] } });
+    const server = startUiServer({ host: "127.0.0.1", port: Number(process.env.MEASURED_UI_PORT ?? "4173"), outputDir: path.resolve(process.env.NOVA_MEASURED_OUTPUT_DIR ?? "output"), environmentTruth: { provider: process.env.MEASURED_UI_PROVIDER ?? "user-owned runtime", engine: process.env.MEASURED_UI_ENGINE ?? "Blender", endpoint: process.env.MEASURED_UI_ENDPOINT ?? "local-process", executionGeography: (process.env.MEASURED_UI_GEOGRAPHY ?? "local") as UiRuntimeConfig["environmentTruth"]["executionGeography"], owner: process.env.MEASURED_UI_OWNER ?? "user-local-runtime", costClass: (process.env.MEASURED_UI_COST ?? "local-compute") as UiRuntimeConfig["environmentTruth"]["costClass"], latencyClass: (process.env.MEASURED_UI_LATENCY ?? "interactive") as UiRuntimeConfig["environmentTruth"]["latencyClass"], fallbackUsed: false, dataScope: ["workspace-state", "operator-decision"], privacyBoundary: process.env.MEASURED_UI_PRIVACY ?? "loopback-only; no telemetry", operatorApprovalRequired: true, auditNotes: ["Execution truth is supplied explicitly at process start."] } });
     server.once("error", (error: NodeJS.ErrnoException) => {
       process.stderr.write(`${JSON.stringify({ error: "workspace_start_failed", code: error.code ?? "UNKNOWN" })}\n`);
       process.exitCode = 1;
