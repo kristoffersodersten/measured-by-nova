@@ -21,7 +21,7 @@ export function startUiServer(config: UiRuntimeConfig) {
 async function handleRequest(request: IncomingMessage, response: ServerResponse, surface: ReturnType<typeof buildExecutableWorkspace>, getHeldBy: () => string | null, setHeldBy: (actor: string) => void): Promise<void> {
   setSecurityHeaders(response);
   if (!validLoopbackHost(request)) return send(response, 421, "application/json", JSON.stringify({ error: "workspace_host_forbidden" }));
-  if (request.method === "GET" && request.url === "/") return send(response, 200, "text/html; charset=utf-8", renderWorkspaceHtml(surface));
+  if (request.method === "GET" && request.url === "/") return send(response, 200, "text/html; charset=utf-8", renderWorkspaceHtml(surface, getHeldBy()));
   if (request.method === "GET" && request.url === "/workspace.js") return send(response, 200, "text/javascript; charset=utf-8", workspaceScript);
   if (request.method === "GET" && request.url === "/api/workspace") { const heldBy = getHeldBy(); return send(response, 200, "application/json", JSON.stringify({ surface, operatorDecision: heldBy ? { decision: "hold", actor: heldBy } : null })); }
   if (request.method === "POST" && request.url === "/api/operator-decision") {
@@ -44,7 +44,7 @@ function setSecurityHeaders(response: ServerResponse): void {
   response.setHeader("referrer-policy", "no-referrer"); response.setHeader("x-content-type-options", "nosniff"); response.setHeader("cache-control", "no-store");
 }
 
-const workspaceScript = `"use strict";document.getElementById("manual-override").addEventListener("click",async()=>{const output=document.getElementById("decision");try{const response=await fetch("/api/operator-decision",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({decision:"hold",actor:"operator"})});const result=await response.json();output.textContent=response.ok?" Delivery held by operator.":" "+result.error;}catch{output.textContent=" Decision failed; delivery state unchanged."}});`;
+const workspaceScript = `"use strict";document.getElementById("manual-override").addEventListener("click",async()=>{const output=document.getElementById("decision");try{const response=await fetch("/api/operator-decision",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({decision:"hold",actor:"operator"})});const result=await response.json();output.textContent=response.ok?"Delivery held by operator.":result.error;}catch{output.textContent="Decision failed; delivery state unchanged."}});`;
 function send(response: ServerResponse, status: number, type: string, body: string): void { response.statusCode = status; response.setHeader("content-type", type); response.end(body); }
 function validLoopbackHost(request: IncomingMessage): boolean {
   const localPort = request.socket.localPort;
@@ -52,7 +52,7 @@ function validLoopbackHost(request: IncomingMessage): boolean {
 }
 function sameOrigin(request: IncomingMessage): boolean {
   const origin = request.headers.origin;
-  return origin === undefined || origin === `http://${request.headers.host}`;
+  return origin === `http://${request.headers.host}`;
 }
 async function readJson(request: IncomingMessage): Promise<Record<string, unknown>> {
   const raw = await new Promise<string>((resolve, reject) => {
