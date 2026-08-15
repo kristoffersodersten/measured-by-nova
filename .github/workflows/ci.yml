@@ -54,7 +54,7 @@ jobs:
       - name: Install declared Blender runtime
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends blender libegl1
+          sudo apt-get install --yes --no-install-recommends blender libegl1 python3-numpy
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - name: Run Blender end-to-end and negative paths
