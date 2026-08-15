@@ -291,24 +291,20 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     if (collisions.length > 0) {
       return fail(req, "export_output_exists", `Portable export refuses to overwrite existing artifacts: ${collisions.join(", ")}`);
     }
-    const snapshotPath = path.join("measurement-projects", payload.projectId, "artifacts", `.portable-export-${req}.blend`);
-    const snapshotAbsolutePath = safeOutputPath(config.outputDir, snapshotPath);
+    let snapshot: LockedModelSnapshot;
     try {
-      await assertExistingPathWithinRoot(config.outputDir, safeOutputPath(config.outputDir, project.modelLock.modelArtifact));
-      await copyFile(safeOutputPath(config.outputDir, project.modelLock.modelArtifact), snapshotAbsolutePath);
-      const snapshotHash = createHash("sha256").update(await readFile(snapshotAbsolutePath)).digest("hex");
-      if (snapshotHash !== project.modelLock.modelHash) {
-        throw new Error("Locked Blender source changed while the immutable export snapshot was created.");
-      }
+      snapshot = await createLockedModelSnapshot(config, project, req, "portable-export");
     } catch (error) {
-      await rm(snapshotAbsolutePath, { force: true });
       return fail(req, "model_lock_invalid", error instanceof Error ? error.message : String(error));
     }
     let result: BlenderToolResult;
     try {
-      result = await runBlenderJob(config, { mode: "measurement_project", operation: "export_model", project, formats: payload.formats, sourceBlendPath: snapshotPath }, outputBlend);
+      result = await runBlenderJob(config, { mode: "measurement_project", operation: "export_model", project, formats: payload.formats, sourceBlendPath: snapshot.path }, outputBlend);
+    } catch (error) {
+      await Promise.all(artifactPaths.map((artifact) => rm(safeOutputPath(config.outputDir, artifact.path), { force: true })));
+      return fail(req, "portable_export_failed", error instanceof Error ? error.message : String(error), ["All partial portable-export artifacts were removed."]);
     } finally {
-      await rm(snapshotAbsolutePath, { force: true });
+      await snapshot.remove();
     }
     if (!result.ok) {
       await Promise.all(artifactPaths.map((artifact) => rm(safeOutputPath(config.outputDir, artifact.path), { force: true })));
@@ -342,10 +338,43 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
       return failExecutionIntent(req, executionGate);
     }
     const project = materializeProfiles(await readProject(config, payload.projectId));
-    const result = await runBlenderJob(config, { mode: "measurement_project", operation: "dimensioned_drawings", project, outputPath: safeOutputPath(config.outputDir, payload.outputPath), scale: payload.scale, includeConfidenceLegend: payload.includeConfidenceLegend }, path.join("measurement-projects", payload.projectId, "artifacts", `${payload.projectId}-drawings.blend`));
+    const lockValidation = await validateModelLock(config, project);
+    if (!lockValidation.ok) return failInvalidModelLock(req, lockValidation);
+    const outputBlend = path.join("measurement-projects", payload.projectId, "artifacts", `${payload.projectId}-drawings.blend`);
+    const outputs = [payload.outputPath, outputBlend];
+    try { await Promise.all(outputs.map((output) => assertOutputParentWithinRoot(config.outputDir, safeOutputPath(config.outputDir, output)))); }
+    catch { return fail(req, "export_path_escape", "Drawing output parent resolves outside the configured output root."); }
+    const collisions = await existingRelativePaths(config.outputDir, outputs);
+    if (collisions.length > 0) return fail(req, "export_output_exists", `Drawing export refuses to overwrite existing artifacts: ${collisions.join(", ")}`);
+    let snapshot: LockedModelSnapshot;
+    try {
+      snapshot = await createLockedModelSnapshot(config, project, req, "dimensioned-drawings");
+    } catch (error) {
+      return fail(req, "model_lock_invalid", error instanceof Error ? error.message : String(error));
+    }
+    let result: BlenderToolResult;
+    try {
+      result = await runBlenderJob(config, { mode: "measurement_project", operation: "dimensioned_drawings", project, sourceBlendPath: snapshot.path, drawingOutputPath: safeOutputPath(config.outputDir, payload.outputPath), scale: payload.scale, includeConfidenceLegend: payload.includeConfidenceLegend }, outputBlend);
+    } catch (error) {
+      await removeRelativePaths(config.outputDir, outputs);
+      return fail(req, "drawing_export_failed", error instanceof Error ? error.message : String(error), ["All partial drawing artifacts were removed."]);
+    } finally {
+      await snapshot.remove();
+    }
+    if (!result.ok) {
+      await removeRelativePaths(config.outputDir, outputs);
+      return fail(req, "drawing_export_failed", "Blender could not export drawings from the locked model; partial artifacts were removed.", [result.stderr]);
+    }
+    let artifacts;
+    try {
+      artifacts = await Promise.all([validateArtifact(config.outputDir, payload.outputPath, "pdf"), validateArtifact(config.outputDir, outputBlend, "blend")]);
+    } catch (error) {
+      await removeRelativePaths(config.outputDir, outputs);
+      return fail(req, "drawing_export_artifact_invalid", error instanceof Error ? error.message : String(error));
+    }
     await appendRequestLog(config, payload.projectId, req, "export_dimensioned_drawings", payload);
-    const executionAction = exportActionEvidence(payload.executionIntent, result, payload.outputPath, { outputPath: payload.outputPath, scale: payload.scale, blender: result });
-    return ok(req, { blender: result, outputPath: safeOutputPath(config.outputDir, payload.outputPath), execution: { intent: payload.executionIntent, action: executionAction } });
+    const executionAction = exportActionEvidence(payload.executionIntent, result, payload.outputPath, { outputPath: payload.outputPath, scale: payload.scale, sourceBlendPath: project.modelLock.modelArtifact, modelHash: project.modelLock.modelHash, artifacts, blender: result });
+    return ok(req, { blender: result, sourceBlendPath: project.modelLock.modelArtifact, modelHash: project.modelLock.modelHash, artifacts, outputPath: safeOutputPath(config.outputDir, payload.outputPath), execution: { intent: payload.executionIntent, action: executionAction } });
   });
 
   register(server, "export_facade_completion_pack", "Export the MVP facade-completion package from a locked measured model using Blender orthographic views.", ExportFacadeCompletionPackSchema, async (input) => {
@@ -381,16 +410,27 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     }
     const outputDir = payload.outputDir ?? path.join("measurement-projects", payload.projectId, "exports", payload.template);
     const outputBlend = path.join(outputDir, `${payload.projectId}-${payload.template}.blend`);
+    try { await assertOutputParentWithinRoot(config.outputDir, safeOutputPath(config.outputDir, outputDir)); }
+    catch { return fail(req, "export_path_escape", "Facade output parent resolves outside the configured output root."); }
+    if (await pathExists(safeOutputPath(config.outputDir, outputDir))) return fail(req, "export_output_exists", `Facade export refuses to overwrite existing output: ${outputDir}`);
     const sourceProjectHashBefore = hashSourceProject(project);
-    const result = await runBlenderJob(config, {
+    let snapshot: LockedModelSnapshot;
+    try { snapshot = await createLockedModelSnapshot(config, project, req, "facade-pack"); }
+    catch (error) { return fail(req, "model_lock_invalid", error instanceof Error ? error.message : String(error)); }
+    let result: BlenderToolResult;
+    try { result = await runBlenderJob(config, {
       mode: "measurement_project",
       operation: "export_template",
       project,
+      sourceBlendPath: snapshot.path,
       template: payload.template,
       templateOutputDir: safeOutputPath(config.outputDir, outputDir),
       options: { scale: payload.scale, views: payload.views, viewRegistry: project.viewRegistry, lockedModel: project.modelLock, capabilityManifest: DefaultCapabilityManifest, strategies: PermitExportStrategies }
-    }, outputBlend);
+    }, outputBlend); }
+    catch (error) { await rm(safeOutputPath(config.outputDir, outputDir), { recursive: true, force: true }); return fail(req, "blender_export_failed", error instanceof Error ? error.message : String(error), ["All partial facade artifacts were removed."]); }
+    finally { await snapshot.remove(); }
     if (!result.ok) {
+      await rm(safeOutputPath(config.outputDir, outputDir), { recursive: true, force: true });
       return fail(req, "blender_export_failed", "Blender did not produce a valid facade-completion export.", [result.stderr], { blender: result });
     }
     const exportOutputDir = safeOutputPath(config.outputDir, outputDir);
@@ -398,10 +438,12 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     try {
       exportManifest = JSON.parse(await readFile(path.join(exportOutputDir, "manifest.json"), "utf8")) as unknown;
     } catch {
+      await rm(safeOutputPath(config.outputDir, outputDir), { recursive: true, force: true });
       return fail(req, "export_manifest_missing", "Facade export did not produce a readable manifest.", [], { blocking: [{ code: "export_manifest_missing", message: "Expected manifest.json is missing or invalid." }] });
     }
     const qa = await evaluateFacadeQaManifest({ manifest: exportManifest, project, requiredViews: payload.views, exportOutputDir, sourceProjectHashBefore });
     if (!qa.ok) {
+      await rm(safeOutputPath(config.outputDir, outputDir), { recursive: true, force: true });
       return fail(req, "facade_qa_failed", "Facade export manifest failed the pixel-perfect contract gates.", qa.blocking.map((reason) => `${reason.code}: ${reason.message}`), { blocking: qa.blocking, visualDiff: qa.visualDiff });
     }
     const artifactKey = `facadeCompletionPack:${payload.template}`;
@@ -420,9 +462,26 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
       return failExecutionIntent(req, executionGate);
     }
     const project = materializeProfiles(await readProject(config, payload.projectId));
+    const lockValidation = await validateModelLock(config, project);
+    if (!lockValidation.ok) return failInvalidModelLock(req, lockValidation);
     const outputDir = payload.outputDir ?? path.join("measurement-projects", payload.projectId, "exports", payload.template);
     const outputBlend = path.join(outputDir, `${payload.projectId}-${payload.template}.blend`);
-    const result = await runBlenderJob(config, { mode: "measurement_project", operation: "export_template", project, template: payload.template, templateOutputDir: safeOutputPath(config.outputDir, outputDir), options: payload.options }, outputBlend);
+    try { await assertOutputParentWithinRoot(config.outputDir, safeOutputPath(config.outputDir, outputDir)); }
+    catch { return fail(req, "export_path_escape", "Template output parent resolves outside the configured output root."); }
+    if (await pathExists(safeOutputPath(config.outputDir, outputDir))) return fail(req, "export_output_exists", `Template export refuses to overwrite existing output: ${outputDir}`);
+    let snapshot: LockedModelSnapshot;
+    try { snapshot = await createLockedModelSnapshot(config, project, req, "project-template"); }
+    catch (error) { return fail(req, "model_lock_invalid", error instanceof Error ? error.message : String(error)); }
+    let result: BlenderToolResult;
+    try { result = await runBlenderJob(config, { mode: "measurement_project", operation: "export_template", project, sourceBlendPath: snapshot.path, template: payload.template, templateOutputDir: safeOutputPath(config.outputDir, outputDir), options: { ...payload.options, lockedModel: project.modelLock } }, outputBlend); }
+    catch (error) { await rm(safeOutputPath(config.outputDir, outputDir), { recursive: true, force: true }); return fail(req, "template_export_failed", error instanceof Error ? error.message : String(error), ["All partial template artifacts were removed."]); }
+    finally { await snapshot.remove(); }
+    if (!result.ok) {
+      await rm(safeOutputPath(config.outputDir, outputDir), { recursive: true, force: true });
+      return fail(req, "template_export_failed", "Blender could not export the template from the locked model; partial artifacts were removed.", [result.stderr]);
+    }
+    try { await validateArtifact(config.outputDir, outputBlend, "blend"); await validateDeclaredTemplateArtifacts(config.outputDir, outputDir); }
+    catch (error) { await rm(safeOutputPath(config.outputDir, outputDir), { recursive: true, force: true }); return fail(req, "template_export_artifact_invalid", error instanceof Error ? error.message : String(error)); }
     const artifactKey = `template:${payload.template}`;
     const next = { ...project, artifacts: { ...project.artifacts, [artifactKey]: safeOutputPath(config.outputDir, outputDir) } };
     await writeProject(config, next);
@@ -551,9 +610,28 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
         { preset, presetReadiness }
       );
     }
+    const project = materializeProfiles(await readProject(config, payload.capture.projectId));
+    if (project.modelLock.modelArtifact !== payload.sourceBlendPath) return fail(req, "model_lock_invalid", "Preview source must be the exact Blender artifact declared by the project model lock.");
+    const lockValidation = await validateModelLock(config, project);
+    if (!lockValidation.ok) return failInvalidModelLock(req, lockValidation);
     const job = buildDigitalViewingBlenderRenderJob(payload.capture, payload.renderPreset, payload.sourceBlendPath, DefaultCapabilityManifest, payload.assetBundleManifest);
     const outputBlend = payload.outputBlendPath ?? payload.renderPreset.outputPath.replace(/\.[^.]+$/, ".blend");
-    const result = await runBlenderJob(config, job, outputBlend);
+    const renderOutputs = [outputBlend, job.renderManifest.artifacts.render, job.renderManifest.artifacts.manifest];
+    try { await Promise.all(renderOutputs.map((output) => assertOutputParentWithinRoot(config.outputDir, safeOutputPath(config.outputDir, output)))); }
+    catch { return fail(req, "render_path_escape", "Preview output parent resolves outside the configured output root."); }
+    const renderCollisions = await existingRelativePaths(config.outputDir, renderOutputs);
+    if (renderCollisions.length > 0) return fail(req, "render_output_exists", `Preview render refuses to overwrite existing artifacts: ${renderCollisions.join(", ")}`);
+    let snapshot: LockedModelSnapshot;
+    try { snapshot = await createLockedModelSnapshot(config, project, req, "digital-viewing"); }
+    catch (error) { return fail(req, "model_lock_invalid", error instanceof Error ? error.message : String(error)); }
+    let result: BlenderToolResult;
+    try { result = await runBlenderJob(config, { ...job, sourceBlendPath: snapshot.path, authoritySourceBlendPath: payload.sourceBlendPath }, outputBlend); }
+    catch (error) { await removeRelativePaths(config.outputDir, renderOutputs); return fail(req, "digital_viewing_render_failed", error instanceof Error ? error.message : String(error), ["All partial preview artifacts were removed."]); }
+    finally { await snapshot.remove(); }
+    if (!result.ok) {
+      await removeRelativePaths(config.outputDir, renderOutputs);
+      return fail(req, "digital_viewing_render_failed", "Blender could not render the preview from the locked model; partial artifacts were removed.", [result.stderr]);
+    }
     await appendRequestLog(config, payload.capture.projectId, req, "render_digital_viewing_preview", {
       captureId: payload.capture.captureId,
       projectId: payload.capture.projectId,
@@ -914,6 +992,119 @@ async function pathExists(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+type LockedModelSnapshot = { path: string; remove: () => Promise<void> };
+
+async function createLockedModelSnapshot(
+  config: BlenderConfig,
+  project: MeasurementProject,
+  req: string,
+  purpose: string
+): Promise<LockedModelSnapshot> {
+  const source = project.modelLock.modelArtifact;
+  const expectedHash = project.modelLock.modelHash;
+  if (!source || !expectedHash) throw new Error("Reviewed model lock is incomplete.");
+  const sourceAbsolute = safeOutputPath(config.outputDir, source);
+  await assertExistingPathWithinRoot(config.outputDir, sourceAbsolute);
+  const snapshotPath = path.join("measurement-projects", project.projectId, "artifacts", `.${purpose}-${req}.blend`);
+  const snapshotAbsolute = safeOutputPath(config.outputDir, snapshotPath);
+  try {
+    await mkdir(path.dirname(snapshotAbsolute), { recursive: true });
+    await assertOutputParentWithinRoot(config.outputDir, snapshotAbsolute);
+    await copyFile(sourceAbsolute, snapshotAbsolute);
+    await assertExistingPathWithinRoot(config.outputDir, snapshotAbsolute);
+    const actualHash = createHash("sha256").update(await readFile(snapshotAbsolute)).digest("hex");
+    if (actualHash !== expectedHash) throw new Error("Locked Blender source changed while its immutable execution snapshot was created.");
+    return { path: snapshotPath, remove: () => rm(snapshotAbsolute, { force: true }) };
+  } catch (error) {
+    await rm(snapshotAbsolute, { force: true });
+    throw error;
+  }
+}
+
+function failInvalidModelLock(req: string, validation: Awaited<ReturnType<typeof validateModelLock>>) {
+  return fail(req, "model_lock_invalid", "Delivery requires the exact unchanged reviewed Blender model.", validation.blocking.map((reason) => `${reason.code}: ${reason.message}`), { blocking: validation.blocking });
+}
+
+async function existingRelativePaths(outputDir: string, paths: string[]): Promise<string[]> {
+  const checked = await Promise.all(paths.map(async (relativePath) => ({ relativePath, exists: await pathExists(safeOutputPath(outputDir, relativePath)) })));
+  return checked.filter((entry) => entry.exists).map((entry) => entry.relativePath);
+}
+
+async function removeRelativePaths(outputDir: string, paths: string[]): Promise<void> {
+  await Promise.all(paths.map((relativePath) => rm(safeOutputPath(outputDir, relativePath), { force: true })));
+}
+
+async function validateArtifact(outputDir: string, relativePath: string, format: "blend" | "pdf" | "json") {
+  const contents = await readFile(safeOutputPath(outputDir, relativePath));
+  if (contents.byteLength === 0) throw new Error(`${format.toUpperCase()} artifact is empty: ${relativePath}`);
+  if (format === "blend" && contents.subarray(0, 7).toString("ascii") !== "BLENDER" && !contents.subarray(0, 4).equals(Buffer.from([0x28, 0xb5, 0x2f, 0xfd]))) {
+    throw new Error(`Blend artifact has an invalid Blender header: ${relativePath}`);
+  }
+  if (format === "pdf" && (contents.subarray(0, 5).toString("ascii") !== "%PDF-" || !contents.subarray(Math.max(0, contents.length - 64)).includes(Buffer.from("%%EOF")))) {
+    throw new Error(`PDF artifact has an invalid header or trailer: ${relativePath}`);
+  }
+  if (format === "json") {
+    try { JSON.parse(contents.toString("utf8")); } catch { throw new Error(`JSON artifact is invalid: ${relativePath}`); }
+  }
+  return { format, path: relativePath, sizeBytes: contents.byteLength, sha256: createHash("sha256").update(contents).digest("hex") };
+}
+
+async function validateDeclaredTemplateArtifacts(outputRoot: string, outputDir: string): Promise<void> {
+  const manifestPath = path.join(outputDir, "manifest.json");
+  const manifestContents = await readFile(safeOutputPath(outputRoot, manifestPath));
+  let manifest: unknown;
+  try { manifest = JSON.parse(manifestContents.toString("utf8")); }
+  catch { throw new Error(`JSON artifact is invalid: ${manifestPath}`); }
+  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) throw new Error("Template manifest must be an object.");
+  const record = manifest as Record<string, unknown>;
+  if (!record.artifacts || typeof record.artifacts !== "object" || Array.isArray(record.artifacts)) throw new Error("Template manifest must declare its complete artifact set.");
+  if (!record.artifactIdentities || typeof record.artifactIdentities !== "object" || Array.isArray(record.artifactIdentities)) throw new Error("Template manifest must bind every artifact identity.");
+  const artifacts = record.artifacts as Record<string, unknown>;
+  const identities = record.artifactIdentities as Record<string, unknown>;
+  const artifactKeys = Object.keys(artifacts).sort();
+  if (artifactKeys.length === 0 || artifactKeys.join("\0") !== Object.keys(identities).sort().join("\0")) throw new Error("Template artifact identities do not exactly match the declared artifact set.");
+  for (const key of artifactKeys) {
+    const declaredPath = artifacts[key];
+    const identity = identities[key];
+    if (typeof declaredPath !== "string" || path.basename(declaredPath) !== declaredPath) throw new Error(`Template artifact path is invalid: ${String(declaredPath)}`);
+    if (!identity || typeof identity !== "object" || Array.isArray(identity)) throw new Error(`Template artifact identity is invalid: ${key}`);
+    const identityRecord = identity as Record<string, unknown>;
+    const contents = await readFile(safeOutputPath(outputRoot, path.join(outputDir, declaredPath)));
+    if (contents.byteLength === 0 || identityRecord.path !== declaredPath || identityRecord.sizeBytes !== contents.byteLength) throw new Error(`Template artifact identity does not match: ${declaredPath}`);
+    const extension = path.extname(declaredPath).toLowerCase();
+    validateTemplateArtifactType(declaredPath, extension, contents);
+    const actualHash = extension === ".png" ? pngSemanticHash(contents) : createHash("sha256").update(contents).digest("hex");
+    if (identityRecord.sha256 !== actualHash || identityRecord.hashScope !== (extension === ".png" ? "png-critical-chunks" : "complete-file")) throw new Error(`Template artifact hash does not match: ${declaredPath}`);
+  }
+}
+
+function validateTemplateArtifactType(relativePath: string, extension: string, contents: Buffer): void {
+  if (extension === ".pdf" && (contents.subarray(0, 5).toString("ascii") !== "%PDF-" || !contents.subarray(Math.max(0, contents.length - 64)).includes(Buffer.from("%%EOF")))) throw new Error(`Template PDF is invalid: ${relativePath}`);
+  if (extension === ".png" && !contents.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) throw new Error(`Template PNG is invalid: ${relativePath}`);
+  if (extension === ".glb" && contents.subarray(0, 4).toString("ascii") !== "glTF") throw new Error(`Template GLB is invalid: ${relativePath}`);
+  if (extension === ".obj" && !bufferHasObjVertex(contents)) throw new Error(`Template OBJ contains no vertices: ${relativePath}`);
+  if (extension === ".svg" && !contents.subarray(0, 1024).includes(Buffer.from("<svg"))) throw new Error(`Template SVG is invalid: ${relativePath}`);
+  if (extension === ".json") { try { JSON.parse(contents.toString("utf8")); } catch { throw new Error(`Template JSON is invalid: ${relativePath}`); } }
+  if (![".pdf", ".png", ".glb", ".obj", ".svg", ".json"].includes(extension)) throw new Error(`Unsupported template artifact type: ${relativePath}`);
+}
+
+function pngSemanticHash(contents: Buffer): string {
+  const hash = createHash("sha256");
+  let offset = 8;
+  while (offset + 12 <= contents.length) {
+    const length = contents.readUInt32BE(offset);
+    const end = offset + 12 + length;
+    if (end > contents.length) throw new Error("PNG chunk exceeds artifact bounds.");
+    const chunkType = contents.subarray(offset + 4, offset + 8);
+    if (["IHDR", "PLTE", "IDAT", "IEND"].includes(chunkType.toString("ascii"))) {
+      hash.update(chunkType);
+      hash.update(contents.subarray(offset + 8, offset + 8 + length));
+    }
+    offset = end;
+  }
+  return hash.digest("hex");
 }
 
 type PortableExportArtifact = { format: "blend" | "glb" | "obj" | "mtl"; path: string };

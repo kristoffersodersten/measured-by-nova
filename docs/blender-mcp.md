@@ -113,9 +113,9 @@ Every new project carries this source-of-truth policy:
 | `lock_model_for_export` | Locks a human-reviewed model before permit-support export. |
 | `generate_elevation_views` | Creates plan, elevation, and section cameras/views. |
 | `export_model` | Exports validated `.blend`, `.glb`, and/or `.obj` artifacts only from an immutable snapshot of the exact current model lock; OBJ material sidecars are included and every artifact is bound by size and SHA-256. |
-| `export_dimensioned_drawings` | Creates a permit-support visualization PDF artifact. |
+| `export_dimensioned_drawings` | Creates a validated permit-support PDF and Blender artifact from an immutable, rehashed snapshot of the exact current model lock; existing outputs are never overwritten. |
 | `export_facade_completion_pack` | Exports the MVP facade-completion package from a locked model. |
-| `export_project_template` | Creates recipient-specific export packages from unchanged source geometry and unchanged Blender orthographic views. |
+| `export_project_template` | Creates recipient-specific packages only from an immutable, rehashed snapshot of the exact current model lock; it fails closed on drift, path escape, collision, partial output, or invalid artifacts. |
 | `list_digital_viewing_capture_presets` | Lists domain capture requirements for vehicle, boat, property, and exterior-structure digital viewing. |
 | `get_digital_viewing_capture_preset` | Returns the capture contract for one asset type and delivery tier. |
 | `get_digital_viewing_capture_guide` | Returns deterministic shot lists plus machine-readable measurement, material, and inspection checklists. |
@@ -123,7 +123,7 @@ Every new project carries this source-of-truth policy:
 | `list_digital_viewing_delivery_profiles` | Lists customer-surface package profiles such as sales listing, showroom, broker preview, and permit support. |
 | `get_digital_viewing_delivery_profile` | Returns the required and optional package targets for one customer-facing delivery surface. |
 | `evaluate_digital_viewing_delivery_profile` | Checks whether a capture declares the required output targets for a customer-facing package profile. |
-| `render_digital_viewing_preview` | Renders a photorealistic preview from a locked Blender source using a deterministic render manifest. |
+| `render_digital_viewing_preview` | Renders a photorealistic preview from an immutable, rehashed snapshot of the exact current model lock while customer evidence remains bound to the authoritative lock path; partial outputs are removed on failure. |
 | `generate_digital_viewing_material_authoring_plan` | Generates deterministic PBR texture-map requirements per material before Blender rendering. |
 | `generate_digital_viewing_material_report` | Generates a deterministic material and condition evidence report from capture data and optional Blender execution metadata. |
 | `generate_digital_viewing_asset_bundle_manifest` | Generates a deterministic pre-render file-readiness manifest for required photo, texture, and expected render assets without starting Blender. |

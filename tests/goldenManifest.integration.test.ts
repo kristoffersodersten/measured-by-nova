@@ -272,6 +272,13 @@ describe("golden manifest integration", () => {
     };
     const geometryBefore = hashGeometry(project);
     const template = "gothenburg-permit";
+    const sourceBlendPath = "measurement-projects/synthetic-carport/artifacts/synthetic-carport.blend";
+    const generated = await runBlenderJob(
+      { outputDir, timeoutMs: 120_000 },
+      { mode: "measurement_project", operation: "generate_model", project: materializedProject },
+      sourceBlendPath
+    );
+    expect(generated.ok, generated.stderr).toBe(true);
 
     async function runExport(runId: string) {
       const templateOutputDir = path.join(outputDir, runId, "exports", template);
@@ -281,6 +288,7 @@ describe("golden manifest integration", () => {
         mode: "measurement_project",
         operation: "export_template",
         project,
+        sourceBlendPath,
         template,
         templateOutputDir,
         options: {
@@ -384,6 +392,13 @@ describe("golden manifest integration", () => {
       message: "Export manifest model hash does not match the reviewed model lock."
     });
     const artifactIdentities = manifest.artifactIdentities as Record<string, unknown>;
+    expect(manifest.globalReferenceFrame.normalization).toMatchObject({
+      validationOnly: true,
+      mutationApplied: false,
+      applyObjectTransforms: { location: false, rotation: false, scale: false },
+      snapVertices: { enabled: false }
+    });
+    expect(Object.keys(artifactIdentities).sort()).toEqual(Object.keys(manifest.artifacts).sort());
     expect(Object.values(artifactIdentities).every((identity: unknown) => {
       const value = identity as { sizeBytes: number; sha256: string; hashScope: string };
       return value.sizeBytes > 0 && /^[a-f0-9]{64}$/.test(value.sha256) && ["complete-file", "png-critical-chunks"].includes(value.hashScope);
@@ -410,6 +425,7 @@ describe("golden manifest integration", () => {
         mode: "measurement_project",
         operation: "export_template",
         project,
+        sourceBlendPath,
         template: "permit",
         templateOutputDir: permitOutputDir,
         options: { scale: "1:100", lockedModel: project.modelLock }

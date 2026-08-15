@@ -204,31 +204,23 @@ def add_panel_grooves(project):
             groove.data.materials.append(groove_mat)
 
 
-def normalize_scene_geometry(tolerance=0.001):
+def inspect_scene_geometry(tolerance=0.001):
     mesh_objects = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
-    bpy.ops.object.select_all(action="DESELECT")
-    for obj in mesh_objects:
-        obj.select_set(True)
-    if mesh_objects:
-        bpy.context.view_layer.objects.active = mesh_objects[0]
-        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-
-    snapped_vertices = 0
+    off_grid_vertices = 0
     max_snap_delta = 0.0
     non_axis_edges = []
     rotations_ok = True
     for obj in mesh_objects:
         rotations_ok = rotations_ok and all(abs(value) <= tolerance for value in obj.rotation_euler)
         for vertex in obj.data.vertices:
-            before = (vertex.co.x, vertex.co.y, vertex.co.z)
-            vertex.co.x = round(vertex.co.x / tolerance) * tolerance
-            vertex.co.y = round(vertex.co.y / tolerance) * tolerance
-            vertex.co.z = round(vertex.co.z / tolerance) * tolerance
-            delta = max(abs(vertex.co.x - before[0]), abs(vertex.co.y - before[1]), abs(vertex.co.z - before[2]))
+            delta = max(
+                abs(vertex.co.x - round(vertex.co.x / tolerance) * tolerance),
+                abs(vertex.co.y - round(vertex.co.y / tolerance) * tolerance),
+                abs(vertex.co.z - round(vertex.co.z / tolerance) * tolerance),
+            )
             if delta > 0:
-                snapped_vertices += 1
+                off_grid_vertices += 1
                 max_snap_delta = max(max_snap_delta, delta)
-        obj.data.update()
 
         vertices = obj.data.vertices
         for edge in obj.data.edges:
@@ -248,13 +240,16 @@ def normalize_scene_geometry(tolerance=0.001):
     ok = rotations_ok and len(non_axis_edges) == 0
     return {
         "ok": ok,
-        "alignAllObjectsToWorldAxes": True,
-        "applyObjectTransforms": {"location": True, "rotation": True, "scale": True},
-        "snapVertices": {"enabled": True, "axis": ["X", "Y", "Z"], "tolerance": tolerance},
+        "validationOnly": True,
+        "mutationApplied": False,
+        "alignAllObjectsToWorldAxes": False,
+        "applyObjectTransforms": {"location": False, "rotation": False, "scale": False},
+        "snapVertices": {"enabled": False, "axis": ["X", "Y", "Z"], "tolerance": tolerance},
         "enforceParallelism": {"horizontalEdges": "Z_constant", "verticalEdges": "X_or_Y_constant"},
         "stats": {
             "meshObjects": len(mesh_objects),
-            "snappedVertices": snapped_vertices,
+            "snappedVertices": 0,
+            "observedOffGridVertices": off_grid_vertices,
             "maxSnapDelta": max_snap_delta,
             "nonAxisEdgeCount": len(non_axis_edges),
         },
@@ -350,8 +345,11 @@ def export_project(payload, output_path):
 
 
 def create_dimensioned_pdf(payload):
-    create_measurement_project(payload)
-    pdf_path = Path(payload["outputPath"])
+    source_path = resolve_under_output_root(payload, payload["sourceBlendPath"])
+    if not source_path.is_file():
+        raise FileNotFoundError(f"Locked drawing source missing: {payload['sourceBlendPath']}")
+    bpy.ops.wm.open_mainfile(filepath=str(source_path))
+    pdf_path = Path(payload["drawingOutputPath"])
     pdf_path.parent.mkdir(parents=True, exist_ok=True)
     project = payload["project"]
     scale = payload.get("scale", "1:100")
@@ -361,8 +359,11 @@ def create_dimensioned_pdf(payload):
 
 
 def export_template(payload):
-    create_measurement_project(payload)
-    normalization_report = normalize_scene_geometry()
+    source_path = resolve_under_output_root(payload, payload["sourceBlendPath"])
+    if not source_path.is_file():
+        raise FileNotFoundError(f"Locked template source missing: {payload['sourceBlendPath']}")
+    bpy.ops.wm.open_mainfile(filepath=str(source_path))
+    normalization_report = inspect_scene_geometry()
     project = payload["project"]
     template = payload["template"]
     options = payload.get("options", {})
@@ -815,15 +816,18 @@ def artifact_identities(output_dir, expected):
     identities = {}
     for key, relative_path in sorted(expected.items()):
         artifact_path = output_dir / relative_path
-        if artifact_path.is_file():
-            content = artifact_path.read_bytes()
-            is_png = artifact_path.suffix.lower() == ".png"
-            identities[key] = {
-                "path": relative_path,
-                "sizeBytes": len(content),
-                "sha256": png_semantic_hash(content) if is_png else hashlib.sha256(content).hexdigest(),
-                "hashScope": "png-critical-chunks" if is_png else "complete-file",
-            }
+        if not artifact_path.is_file():
+            raise FileNotFoundError(f"Declared template artifact missing: {relative_path}")
+        content = artifact_path.read_bytes()
+        if len(content) == 0:
+            raise ValueError(f"Declared template artifact is empty: {relative_path}")
+        is_png = artifact_path.suffix.lower() == ".png"
+        identities[key] = {
+            "path": relative_path,
+            "sizeBytes": len(content),
+            "sha256": png_semantic_hash(content) if is_png else hashlib.sha256(content).hexdigest(),
+            "hashScope": "png-critical-chunks" if is_png else "complete-file",
+        }
     return identities
 
 
@@ -1234,7 +1238,7 @@ def write_cad_simulated_svg(svg_path, project, template, options=None):
 
 def write_cad_pipeline_validation(validation_path, project, options=None, normalization_report=None):
     options = options or {}
-    normalization_report = normalization_report or normalize_scene_geometry()
+    normalization_report = normalization_report or inspect_scene_geometry()
     line_classes = southwest_facade_line_classes(project) if options.get("view") == "southwest" else {}
     reject_if = {
         "edgesAreNotParallelWithinTolerance": normalization_report["rejectIf"]["edgesAreNotParallelWithinTolerance"],
@@ -1297,7 +1301,7 @@ def write_cad_pipeline_validation(validation_path, project, options=None, normal
 
 def write_measured_visualization_validation(validation_path, project, options=None, normalization_report=None):
     options = options or {}
-    normalization_report = normalization_report or normalize_scene_geometry()
+    normalization_report = normalization_report or inspect_scene_geometry()
     report = {
         "ok": True,
         "contract": {
