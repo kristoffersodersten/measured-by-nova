@@ -179,6 +179,7 @@ export function buildDigitalViewingRenderManifest(
         value: measurement.value,
         unit: measurement.unit,
         tolerance: measurement.tolerance,
+        geometryValidation: measurement.placement?.geometryValidation,
         sourceOfTruth: "declared-measurement-value-used-by-blender"
       })),
     materials: capture.materials

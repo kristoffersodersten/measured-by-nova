@@ -70,7 +70,8 @@
         "axis": "x",
         "from": "west exterior wall plane",
         "to": "east exterior wall plane",
-        "referenceFrame": "site-local"
+        "referenceFrame": "site-local",
+        "geometryValidation": "axis-extent"
       },
       "affectsGeometry": true,
       "tolerance": 5
@@ -88,7 +89,8 @@
         "axis": "y",
         "from": "south exterior wall plane",
         "to": "north exterior wall plane",
-        "referenceFrame": "site-local"
+        "referenceFrame": "site-local",
+        "geometryValidation": "axis-extent"
       },
       "affectsGeometry": true,
       "tolerance": 5
@@ -106,7 +108,8 @@
         "axis": "z",
         "from": "finished ground reference",
         "to": "highest roof/facade point",
-        "referenceFrame": "site-local"
+        "referenceFrame": "site-local",
+        "geometryValidation": "axis-extent"
       },
       "affectsGeometry": true,
       "tolerance": 5

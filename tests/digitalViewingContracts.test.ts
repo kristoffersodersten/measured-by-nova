@@ -617,6 +617,22 @@ describe("digital viewing capture contract", () => {
     expect(result.blocking).toEqual([]);
   });
 
+  it.each([
+    ["unit", { unit: "deg" }],
+    ["axis", { placement: { axis: "slope" } }]
+  ] as const)("rejects axis-extent geometry validation with incompatible %s", (_label, change) => {
+    const capture = DigitalViewingCaptureSchema.parse(loadVehicleCapture());
+    const measurement = capture.measurements[0];
+    const changedMeasurement = "placement" in change
+      ? { ...measurement, placement: { ...measurement.placement, ...change.placement } }
+      : { ...measurement, ...change };
+    const result = DigitalViewingCaptureSchema.safeParse({
+      ...capture,
+      measurements: [changedMeasurement, ...capture.measurements.slice(1)]
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("blocks vehicle premium capture when required inspection zones are not verified", () => {
     const capture = DigitalViewingCaptureSchema.parse(loadVehicleCapture());
     const preset = getDigitalViewingCapturePreset("vehicle", "premium-sales");

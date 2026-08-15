@@ -70,7 +70,8 @@
         "axis": "x",
         "from": "front bumper outer plane",
         "to": "rear bumper outer plane",
-        "referenceFrame": "asset-local"
+        "referenceFrame": "asset-local",
+        "geometryValidation": "axis-extent"
       },
       "affectsGeometry": true,
       "tolerance": 5
@@ -88,7 +89,8 @@
         "axis": "y",
         "from": "left outer body plane",
         "to": "right outer body plane",
-        "referenceFrame": "asset-local"
+        "referenceFrame": "asset-local",
+        "geometryValidation": "axis-extent"
       },
       "affectsGeometry": true,
       "tolerance": 5
@@ -106,7 +108,8 @@
         "axis": "z",
         "from": "ground contact plane",
         "to": "roof highest point",
-        "referenceFrame": "asset-local"
+        "referenceFrame": "asset-local",
+        "geometryValidation": "axis-extent"
       },
       "affectsGeometry": true,
       "tolerance": 5
@@ -124,7 +127,8 @@
         "axis": "x",
         "from": "front axle centerline",
         "to": "rear axle centerline",
-        "referenceFrame": "asset-local"
+        "referenceFrame": "asset-local",
+        "geometryValidation": "axis-extent"
       },
       "affectsGeometry": true,
       "tolerance": 5

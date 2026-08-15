@@ -71,7 +71,8 @@
         "axis": "x",
         "from": "bow foremost point",
         "to": "stern outer transom plane",
-        "referenceFrame": "asset-local"
+        "referenceFrame": "asset-local",
+        "geometryValidation": "axis-extent"
       },
       "affectsGeometry": true,
       "tolerance": 5
@@ -89,7 +90,8 @@
         "axis": "y",
         "from": "port widest point",
         "to": "starboard widest point",
-        "referenceFrame": "asset-local"
+        "referenceFrame": "asset-local",
+        "geometryValidation": "axis-extent"
       },
       "affectsGeometry": true,
       "tolerance": 5
