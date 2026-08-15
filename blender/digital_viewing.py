@@ -1138,7 +1138,7 @@ def render_digital_viewing(payload, output_path):
     reference_comparison_report = render_reference_comparison_report(payload, render_manifest, render_path)
     execution_report = {
         "renderedBy": "blender",
-        "sourceBlendPath": payload["sourceBlendPath"],
+        "sourceBlendPath": payload.get("authoritySourceBlendPath", payload["sourceBlendPath"]),
         "outputBlendPath": str(output_path),
         "materialAuthoring": material_authoring_report,
         "measurementAuthority": measurement_authority,

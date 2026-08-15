@@ -663,8 +663,12 @@ package assembly fails closed because the digital viewing promise includes exact
 dimensions, not only visual material fidelity.
 
 The first Blender execution slice now consumes this contract through
-`render_digital_viewing_preview`. That tool requires a locked `.blend` source,
-validated capture, and render preset. It opens the source Blender file, applies
+`render_digital_viewing_preview`. That tool requires the exact current model-lock
+`.blend` source, verifies the project and artifact hashes, executes Blender from a
+unique immutable snapshot, and records the authoritative lock path rather than the
+ephemeral execution path. Existing outputs, path escapes, model drift and partial
+render artifacts fail closed. With a validated capture and render preset, Blender
+opens the verified snapshot, applies
 manifest-backed PBR material records to matching scene objects, applies texture
 maps when source files exist, reports missing texture files instead of silently
 inventing them, configures camera and lighting from the preset, writes the

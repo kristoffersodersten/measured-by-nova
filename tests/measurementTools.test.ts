@@ -962,6 +962,37 @@ describe("measurement MCP digital viewing tools", () => {
     expect(body.error.code).toBe("source_projection_photo_missing");
   });
 
+  it("fails every drawing and template delivery path closed when no reviewed model lock exists", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "nova-unlocked-delivery-"));
+    const projectDir = path.join(outputDir, "measurement-projects", "unlocked-delivery");
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(path.join(projectDir, "project.json"), JSON.stringify(MeasurementProjectSchema.parse({
+      schemaVersion: 1,
+      projectId: "unlocked-delivery",
+      unit: "mm"
+    })), "utf8");
+    const tools = makeToolHarness(outputDir);
+    const drawings = await tools.get("export_dimensioned_drawings")!.handler({
+      projectId: "unlocked-delivery",
+      executionIntent: executionIntent("export-drawings", ["blender-output", "manifest"]),
+      outputPath: "deliveries/drawings.pdf",
+      scale: "1:100",
+      includeConfidenceLegend: true
+    });
+    const template = await tools.get("export_project_template")!.handler({
+      projectId: "unlocked-delivery",
+      executionIntent: executionIntent("export-template", ["project-state", "blender-output", "manifest"]),
+      template: "client-preview",
+      options: {}
+    });
+    expect(drawings.isError).toBe(true);
+    expect(template.isError).toBe(true);
+    const drawingsBody = JSON.parse(drawings.content[0].text) as { error: { code: string } };
+    const templateBody = JSON.parse(template.content[0].text) as { error: { code: string } };
+    expect(drawingsBody.error.code).toBe("model_lock_invalid");
+    expect(templateBody.error.code).toBe("model_lock_invalid");
+  });
+
   it("rejects source-projection inputs that escape through symlinks", async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "nova-source-projection-root-"));
     const outsideDir = await mkdtemp(path.join(tmpdir(), "nova-source-projection-outside-"));
