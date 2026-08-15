@@ -4,6 +4,7 @@ import { buildMeasuredUiSurface, type MeasuredUiSurface, UiEnvironmentTruthSchem
 export const UiRuntimeConfigSchema = z.object({
   host: z.literal("127.0.0.1"),
   port: z.number().int().min(0).max(65535),
+  outputDir: z.string().min(1),
   environmentTruth: UiEnvironmentTruthSchema
 }).strict();
 

@@ -1,13 +1,19 @@
 import { once } from "node:events";
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { request } from "node:http";
 import type { AddressInfo } from "node:net";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { startUiServer } from "../src/uiServer.js";
 import { buildExecutableWorkspace, renderWorkspaceHtml, type UiRuntimeConfig } from "../src/uiWorkspace.js";
+import { loadUiProjectWorkspace } from "../src/uiProjectState.js";
+import { MeasurementProjectSchema } from "../src/measurementContracts.js";
+import { hashValidationSourceProject } from "../src/modelLock.js";
 
 const openServers: ReturnType<typeof startUiServer>[] = [];
-const config = (): UiRuntimeConfig => ({
-  host: "127.0.0.1", port: 0, environmentTruth: { provider: "Hetzner", engine: "Blender 4.0.2", endpoint: "remote-ci-runner",
+const config = (outputDir = path.join(os.tmpdir(), "nova-ui-empty")): UiRuntimeConfig => ({
+  host: "127.0.0.1", port: 0, outputDir, environmentTruth: { provider: "Hetzner", engine: "Blender 4.0.2", endpoint: "remote-ci-runner",
   executionGeography: "remote", owner: "project-ci", costClass: "included-remote", latencyClass: "long-running",
   fallbackUsed: false, dataScope: ["workspace-state", "operator-decision"], privacyBoundary: "loopback-only; no telemetry",
   operatorApprovalRequired: true, auditNotes: ["test runtime"] }
@@ -18,8 +24,8 @@ afterEach(async () => { await Promise.all(openServers.splice(0).map((server) => 
   server.close(() => resolve());
 }))); });
 
-async function runningServer() {
-  const server = startUiServer(config()); openServers.push(server); if (!server.listening) await once(server, "listening");
+async function runningServer(runtimeConfig = config()) {
+  const server = startUiServer(runtimeConfig); openServers.push(server); if (!server.listening) await once(server, "listening");
   const port = (server.address() as AddressInfo).port; return { server, origin: `http://127.0.0.1:${port}` };
 }
 
@@ -49,29 +55,77 @@ describe("executable Measured workspace", () => {
     const { origin } = await runningServer();
     const page = await fetch(origin); const state = await fetch(`${origin}/api/workspace`);
     expect(page.status).toBe(200); expect(page.headers.get("content-security-policy")).toContain("default-src 'none'");
-    expect(await page.text()).toContain("Capture Contract"); expect((await state.json()) as object).toMatchObject({ operatorDecision: null });
+    expect(await page.text()).toContain("Capture Contract"); expect(state.status).toBe(400);
+    expect((await state.json()) as object).toEqual({ error: "workspace_project_required" });
+  });
+
+  it("discovers only valid in-root projects and derives causal live state", async () => {
+    const outputDir = await projectFixture("observed-project");
+    const outside = await mkdtemp(path.join(os.tmpdir(), "nova-ui-outside-"));
+    await writeFile(path.join(outside, "project.json"), JSON.stringify({ schemaVersion: 1, projectId: "escaped", unit: "mm" }), "utf8");
+    await symlink(outside, path.join(outputDir, "measurement-projects", "escaped"));
+    await mkdir(path.join(outputDir, "measurement-projects", "malformed"));
+    await writeFile(path.join(outputDir, "measurement-projects", "malformed", "project.json"), "{", "utf8");
+    const { origin } = await runningServer(config(outputDir));
+    expect(await (await fetch(`${origin}/api/projects`)).json()).toEqual({ projects: ["observed-project"] });
+    const workspace = await (await fetch(`${origin}/api/workspace?projectId=observed-project`)).json() as { project: object; surface: { panels: Array<{ states: Array<{ status: string; blockingReason?: string }> }> } };
+    expect(workspace.project).toMatchObject({ projectId: "observed-project", captureReady: false, validationPassed: false, modelLockValid: false });
+    expect(workspace.surface.panels[0]?.states[0]).toMatchObject({ status: "blocked", blockingReason: "At least one photo and one measurement or profile are required." });
+    expect((await fetch(`${origin}/api/workspace?projectId=escaped`)).status).toBe(404);
+  });
+
+  it("rejects a measurement-projects root that escapes through a symlink", async () => {
+    const outputDir = await mkdtemp(path.join(os.tmpdir(), "nova-ui-root-"));
+    const outside = await mkdtemp(path.join(os.tmpdir(), "nova-ui-external-root-"));
+    await symlink(outside, path.join(outputDir, "measurement-projects"));
+    const { origin } = await runningServer(config(outputDir));
+    const response = await fetch(`${origin}/api/projects`);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "workspace_projects_root_escape" });
+  });
+
+  it("accepts only completed validation bound to the current project state", async () => {
+    const outputDir = await mkdtemp(path.join(os.tmpdir(), "nova-ui-validation-"));
+    const fixture = MeasurementProjectSchema.parse(JSON.parse(await readFile("fixtures/synthetic-carport-project.json", "utf8")) as unknown);
+    const validation = { ok: true, checks: [{ name: "known_dimensions:profile", ok: true, message: "validated" }], warnings: [], sourceProjectHash: hashValidationSourceProject(fixture) };
+    const validated = { ...fixture, validation };
+    const projectDir = path.join(outputDir, "measurement-projects", fixture.projectId);
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(path.join(projectDir, "project.json"), JSON.stringify(validated), "utf8");
+    expect((await loadUiProjectWorkspace(config(outputDir), fixture.projectId)).project.validationPassed).toBe(true);
+    const mutated = { ...validated, assumptions: [...validated.assumptions, { id: "late-change", text: "Changed after validation", confidence: "medium" as const, source: "user_declared" as const, affectsGeometry: false }] };
+    await writeFile(path.join(projectDir, "project.json"), JSON.stringify(mutated), "utf8");
+    expect((await loadUiProjectWorkspace(config(outputDir), fixture.projectId)).project.validationPassed).toBe(false);
   });
 
   it("records only an explicit hold decision and rejects unsafe or malformed mutations", async () => {
-    const { origin } = await runningServer();
+    const outputDir = await projectFixture("runtime-project");
+    const { origin } = await runningServer(config(outputDir));
     const forbidden = await fetch(`${origin}/api/operator-decision`, { method: "POST", headers: { origin: "https://attacker.invalid", "content-type": "application/json" }, body: "{}" });
     const forbiddenHost = await statusWithHost(`${origin}/api/workspace`, "attacker.invalid");
     const missingOrigin = await fetch(`${origin}/api/operator-decision`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
     const mutationHeaders = { origin, "content-type": "application/json" };
-    const invalid = await fetch(`${origin}/api/operator-decision`, { method: "POST", headers: mutationHeaders, body: JSON.stringify({ decision: "approve", actor: "operator" }) });
+    const invalid = await fetch(`${origin}/api/operator-decision`, { method: "POST", headers: mutationHeaders, body: JSON.stringify({ decision: "approve", actor: "operator", projectId: "runtime-project" }) });
     const malformed = await fetch(`${origin}/api/operator-decision`, { method: "POST", headers: mutationHeaders, body: "{" });
-    const held = await fetch(`${origin}/api/operator-decision`, { method: "POST", headers: mutationHeaders, body: JSON.stringify({ decision: "hold", actor: "operator" }) });
+    const held = await fetch(`${origin}/api/operator-decision`, { method: "POST", headers: mutationHeaders, body: JSON.stringify({ decision: "hold", actor: "operator", projectId: "runtime-project" }) });
     expect([forbidden.status, forbiddenHost, missingOrigin.status, invalid.status, malformed.status, held.status]).toEqual([403, 421, 403, 422, 400, 200]);
-    expect((await (await fetch(`${origin}/api/workspace`)).json()) as object).toMatchObject({ operatorDecision: { decision: "hold", actor: "operator" } });
-    expect(await (await fetch(origin)).text()).toContain("Delivery held by operator.");
+    expect((await (await fetch(`${origin}/api/workspace?projectId=runtime-project`)).json()) as object).toMatchObject({ operatorDecision: { decision: "hold", actor: "operator", projectId: "runtime-project" } });
+    expect(await (await fetch(`${origin}/?projectId=runtime-project`)).text()).toContain("Delivery held by operator.");
   });
 
-  it("recovers with no residual decision after a controlled restart", async () => {
-    const first = await runningServer();
-    await fetch(`${first.origin}/api/operator-decision`, { method: "POST", headers: { origin: first.origin, "content-type": "application/json" }, body: JSON.stringify({ decision: "hold", actor: "operator" }) });
+  it("persists a project hold across restart and revokes it explicitly", async () => {
+    const outputDir = await projectFixture("persistent-project");
+    const first = await runningServer(config(outputDir));
+    await fetch(`${first.origin}/api/operator-decision`, { method: "POST", headers: { origin: first.origin, "content-type": "application/json" }, body: JSON.stringify({ decision: "hold", actor: "operator", projectId: "persistent-project" }) });
     await new Promise<void>((resolve) => first.server.close(() => resolve())); openServers.splice(openServers.indexOf(first.server), 1);
-    const second = await runningServer();
-    expect((await (await fetch(`${second.origin}/api/workspace`)).json()) as object).toMatchObject({ operatorDecision: null });
+    const second = await runningServer(config(outputDir));
+    expect((await (await fetch(`${second.origin}/api/workspace?projectId=persistent-project`)).json()) as object).toMatchObject({ operatorDecision: { decision: "hold" } });
+    await fetch(`${second.origin}/api/operator-decision`, { method: "POST", headers: { origin: second.origin, "content-type": "application/json" }, body: JSON.stringify({ decision: "release", actor: "operator", projectId: "persistent-project" }) });
+    expect((await (await fetch(`${second.origin}/api/workspace?projectId=persistent-project`)).json()) as object).toMatchObject({ operatorDecision: null });
+    await writeFile(path.join(outputDir, "measurement-projects", "persistent-project", ".ui-decision.json"), "{", "utf8");
+    const corrupted = await fetch(`${second.origin}/api/workspace?projectId=persistent-project`);
+    expect(corrupted.status).toBe(404);
+    expect(await corrupted.json()).toEqual({ error: "workspace_decision_invalid" });
   });
 
   it("exposes a causal startup error when the loopback port is occupied", async () => {
@@ -90,3 +144,11 @@ describe("executable Measured workspace", () => {
     expect(html).toContain("Used: primary unavailable"); expect(html).toContain("endpoint timeout"); expect(html).toContain("project-json, photos");
   });
 });
+
+async function projectFixture(projectId: string): Promise<string> {
+  const outputDir = await mkdtemp(path.join(os.tmpdir(), "nova-ui-project-"));
+  const projectDir = path.join(outputDir, "measurement-projects", projectId);
+  await mkdir(projectDir, { recursive: true });
+  await writeFile(path.join(projectDir, "project.json"), JSON.stringify({ schemaVersion: 1, projectId, unit: "mm" }), "utf8");
+  return outputDir;
+}

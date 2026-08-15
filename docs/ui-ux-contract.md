@@ -197,21 +197,29 @@ pnpm exec vitest run tests/uiSurfaceContract.test.ts
 the three contract panels, visible Environment Truth, output-authority warning,
 and an explicit manual hold action. It has no external assets or telemetry,
 sets a deny-by-default content security policy, limits mutation bodies, checks
-browser origin, and exposes machine-readable state at `/api/workspace`.
+browser origin, exposes discovery at `/api/projects`, and exposes live state at
+`/api/workspace?projectId=...`.
 
-Startup is intentionally an honest empty state: no capture package is selected,
-validation has not started, and model lock remains causally blocked. Runtime
-identity alone never implies that project evidence was loaded or verified.
-Configured engine identity is visible but remains pending until a separate
-runtime proof is bound. All accepted Environment Truth fields, including data
-scope and any fallback cause/primary failure, remain visible. An active hold is
-rendered again after navigation and clears only on controlled process restart.
-Invalid runtime configuration and occupied-port startup failures terminate with
-explicit machine-readable errors; no alternate bind address or port is chosen.
+Startup without an explicit project is an honest empty state. There is no
+implicit project fallback. The configured output root is the only project
+authority; discovery lists only schema-valid projects whose real paths remain
+inside that root. Each selected workspace re-reads project, validation,
+model-lock and render-manifest evidence. Missing, malformed,
+identity-mismatched or symlink-escaped state is unavailable rather than
+approximated. Preview readiness requires a validated Blender render manifest
+bound to the declared render path and remains visibly non-authoritative.
+
+All accepted Environment Truth fields, including data scope and any fallback
+cause/primary failure, remain visible. Operator holds are explicit,
+project-scoped, atomically persisted with mode `0600`, survive restart, and are
+removed only by an explicit `release` decision. Invalid runtime configuration
+and occupied-port startup failures terminate with explicit machine-readable
+errors; no alternate bind address or port is chosen.
 
 Runtime identity is explicit through `MEASURED_UI_PROVIDER`,
 `MEASURED_UI_ENGINE`, `MEASURED_UI_ENDPOINT`, `MEASURED_UI_GEOGRAPHY`,
 `MEASURED_UI_OWNER`, `MEASURED_UI_COST`, `MEASURED_UI_LATENCY`, and
 `MEASURED_UI_PRIVACY`. Invalid or unknown truth values fail process startup.
+`NOVA_MEASURED_OUTPUT_DIR` selects the explicit project root.
 The manual override can hold delivery only; it cannot silently approve, lock,
 or upgrade an output.

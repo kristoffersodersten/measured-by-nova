@@ -50,6 +50,13 @@ export function hashSourceProject(project: MeasurementProject): string {
   return hashValue(source);
 }
 
+export function hashValidationSourceProject(project: MeasurementProject): string {
+  const source = Object.fromEntries(
+    Object.entries(project).filter(([key]) => key !== "validation" && key !== "modelLock" && key !== "artifacts")
+  );
+  return hashValue(source);
+}
+
 function requireModelArtifact(project: MeasurementProject): string {
   const artifact = project.artifacts.blend;
   if (!artifact) {

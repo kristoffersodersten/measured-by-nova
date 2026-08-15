@@ -34,6 +34,7 @@ import {
   ListDigitalViewingDeliveryProfilesInputSchema,
   ListDigitalViewingCapturePresetsInputSchema,
   RenderDigitalViewingPreviewInputSchema,
+  DigitalViewingRenderManifestSchema,
   serializeDigitalViewingAssetBundleManifest,
   serializeDigitalViewingDeliveryPackageManifest,
   serializeDigitalViewingMaterialConditionReport,
@@ -43,7 +44,7 @@ import {
 } from "./digitalViewingContracts.js";
 import { materializeProfiles } from "./profileGenerator.js";
 import { evaluateFacadeQaManifest } from "./facadeQa.js";
-import { buildModelLock, hashSourceProject, validateModelLock } from "./modelLock.js";
+import { buildModelLock, hashSourceProject, hashValidationSourceProject, validateModelLock } from "./modelLock.js";
 import { buildOrthographicViewRegistry, validateRequiredViews } from "./viewRegistry.js";
 import { appendRequestLog, fail, ok, readProject, requestId, writeProject } from "./projectStore.js";
 import { buildSourceProjectionBlenderJob, buildSourceProjectionManifest, SourceProjectionError, SourceProjectionExecutionReportSchema, SourceProjectionInputSchema } from "./sourceProjection.js";
@@ -218,7 +219,7 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     const req = requestId();
     const payload = ValidateModelSchema.parse(input);
     const project = materializeProfiles(await readProject(config, payload.projectId));
-    const validation = validateProject(project, payload.checks);
+    const validation = { ...validateProject(project, payload.checks), sourceProjectHash: hashValidationSourceProject(project) };
     const next = { ...project, validation };
     await writeProject(config, next);
     await appendRequestLog(config, payload.projectId, req, "validate_model", payload);
@@ -632,18 +633,30 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
       await removeRelativePaths(config.outputDir, renderOutputs);
       return fail(req, "digital_viewing_render_failed", "Blender could not render the preview from the locked model; partial artifacts were removed.", [result.stderr]);
     }
+    let executedManifest;
+    try {
+      executedManifest = DigitalViewingRenderManifestSchema.parse(JSON.parse(await readFile(safeOutputPath(config.outputDir, job.renderManifest.artifacts.manifest), "utf8")));
+      if (executedManifest.artifacts.manifest !== job.renderManifest.artifacts.manifest || executedManifest.artifacts.render !== job.renderManifest.artifacts.render) throw new Error("Executed preview artifacts do not match the requested render contract.");
+      const renderContents = await readFile(safeOutputPath(config.outputDir, job.renderManifest.artifacts.render));
+      if (executedManifest.blenderExecution?.renderArtifact?.sha256 !== createHash("sha256").update(renderContents).digest("hex")) throw new Error("Rendered preview hash does not match Blender execution evidence.");
+    } catch (error) {
+      await removeRelativePaths(config.outputDir, renderOutputs);
+      return fail(req, "digital_viewing_render_artifact_invalid", error instanceof Error ? error.message : String(error), ["All partial preview artifacts were removed."]);
+    }
+    const nextProject = { ...project, artifacts: { ...project.artifacts, digitalViewingPreview: executedManifest.artifacts.render, digitalViewingRenderManifest: executedManifest.artifacts.manifest } };
+    await writeProject(config, nextProject);
     await appendRequestLog(config, payload.capture.projectId, req, "render_digital_viewing_preview", {
       captureId: payload.capture.captureId,
       projectId: payload.capture.projectId,
       sourceBlendPath: payload.sourceBlendPath,
       renderPreset: payload.renderPreset,
       outputBlendPath: outputBlend,
-      renderManifestHash: job.renderManifest.hashes.manifestHash
+      renderManifestHash: executedManifest.hashes.manifestHash
     });
     return ok(req, {
       blender: result,
-      renderManifest: job.renderManifest,
-      artifacts: job.renderManifest.artifacts
+      renderManifest: executedManifest,
+      artifacts: executedManifest.artifacts
     }, [
       "Photorealistic preview is not geometry authority.",
       "Render used locked Blender geometry and did not reconstruct geometry in the export stage."
