@@ -62,7 +62,7 @@ jobs:
           BLENDER_PATH: /usr/bin/blender
         run: |
           started_at=$(date +%s%3N)
-          pnpm vitest run tests/goldenManifest.integration.test.ts
+          pnpm vitest run tests/goldenManifest.integration.test.ts tests/sourceProjection.integration.test.ts
           completed_at=$(date +%s%3N)
           blender_runtime_ms=$((completed_at - started_at))
           MEASURED_BLENDER_RUNTIME_MS="$blender_runtime_ms" pnpm benchmark:xray
