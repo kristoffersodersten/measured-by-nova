@@ -1448,6 +1448,16 @@ viewer shell artifact, but the package blocks delivery unless a ready `glb`,
 keeps the web viewer from becoming a decorative shell without renderable model
 truth.
 
+The executable path is `generate_web_viewer`. It creates `index.html`,
+`viewer.js`, `model.glb`, and `viewer-manifest.json` atomically from an immutable
+snapshot of the exact current model lock. The viewer uses browser-native WebGL
+and Web Crypto only: its content security policy forbids external resources,
+telemetry and fallback. A showroom delivery package accepts the viewer only
+when the on-disk manifest and every artifact validate, the manifest is bound to
+the same project and model lock, its declared hash matches the supplied
+delivery identity, and its packaged GLB hash matches the showroom GLB target.
+Caller-asserted viewer paths and hashes are not delivery evidence.
+
 The `viewerLayerCoverage.material-fidelity` layer is blocked when material
 categories, PBR definitions, declared photo calibration, Blender material/texture
 application, Blender texture color-space execution proof, Blender surface-

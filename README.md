@@ -155,6 +155,7 @@ After building the project, register the server with your MCP client:
 | `lock_model_for_export` | Locks a human-reviewed model before permit-support export. |
 | `generate_elevation_views` | Creates orthographic plan, elevation, and section views. |
 | `export_model` | Exports measured artifacts as `.blend`, `.glb`, and/or `.obj`. |
+| `generate_web_viewer` | Builds an offline, integrity-bound browser viewer from the exact current model lock. |
 | `export_dimensioned_drawings` | Generates a permit-support visualization PDF artifact. |
 | `export_facade_completion_pack` | Exports the MVP facade-completion package from a locked model. |
 | `export_project_template` | Exports recipient-specific packages such as `permit-facade-pack`, `gothenburg-permit`, or `client-preview`. |
