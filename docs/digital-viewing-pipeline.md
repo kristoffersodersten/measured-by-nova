@@ -318,7 +318,8 @@ The first generalized capture contract is implemented in
 
 It currently validates:
 
-- asset types: vehicle, boat, property, exterior structure, product, custom
+- deliverable preset domains: vehicle, boat, property, exterior structure, and product
+- custom is an extension capture type, not a generic deliverable domain; it fails closed until a project-specific preset defines its measurements, sectors, materials, and inspection zones
 - declared renderable model elements for host validation
 - verified geometry-impacting measurements
 - premium measurement placement for traceable dimensions on the renderable asset

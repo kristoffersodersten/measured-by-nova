@@ -501,6 +501,8 @@ export const DigitalViewingCaptureGuideSchema = z.object({
       cameraMode: CaptureCameraModeSchema,
       targetYawDeg: z.number().finite().min(-180).max(180).optional(),
       yawToleranceDeg: z.number().finite().positive().max(90).optional(),
+      targetPitchDeg: z.number().finite().min(-90).max(90).optional(),
+      pitchToleranceDeg: z.number().finite().positive().max(45).optional(),
       pitchGuidance: CapturePitchGuidanceSchema,
       lensGuidance: CaptureLensGuidanceSchema,
       coverage: CaptureCoverageSchema,

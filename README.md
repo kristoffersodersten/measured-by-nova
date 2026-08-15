@@ -73,7 +73,7 @@ See [MVP product contract](docs/mvp.md).
 ## Features
 
 - Create spatial reconstruction projects with confidence-tagged dimensions, camera captures, material metadata, planes, openings, steps, and profiles.
-- Validate digital viewing capture packages for vehicles, boats, properties, exterior structures, products, and custom assets.
+- Validate digital viewing capture packages for vehicles, boats, properties, exterior structures, and products. Custom captures are extension contracts and fail closed until a project-specific preset is supplied.
 - Generate deterministic 1:1 Blender models from typed parametric profiles and measured constraints.
 - Align geometry with structured photographic evidence without letting photos override exact measurements.
 - Support photogrammetry-assisted texture projection and PBR material workflows as the pipeline matures.

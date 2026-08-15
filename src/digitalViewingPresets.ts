@@ -150,6 +150,42 @@ export const DigitalViewingCapturePresets = {
     requiredInspectionZones: ["cladding", "openings", "foundation", "roof", "stairs"],
     conditionEvidenceRequired: true,
     textureEvidenceRequired: true
+  },
+  "product:draft-preview": {
+    presetId: "product-draft-preview",
+    assetType: "product",
+    deliveryTier: "draft-preview",
+    requiredSectors: ["front", "back", "left", "right", "top"],
+    requiredMeasurements: ["overall-length", "overall-width", "overall-height"],
+    requiredPhotoRoles: ["geometry_alignment", "material"],
+    requiredMaterialCategories: [],
+    requiredInspectionZones: [],
+    conditionEvidenceRequired: false,
+    textureEvidenceRequired: false
+  },
+  "product:standard-viewing": {
+    presetId: "product-standard-viewing",
+    assetType: "product",
+    deliveryTier: "standard-viewing",
+    requiredSectors: ["front", "back", "left", "right", "top", "detail"],
+    requiredMeasurements: ["overall-length", "overall-width", "overall-height"],
+    requiredPhotoRoles: ["geometry_alignment", "material", "condition"],
+    requiredMaterialCategories: [],
+    requiredInspectionZones: [],
+    conditionEvidenceRequired: false,
+    textureEvidenceRequired: false
+  },
+  "product:premium-sales": {
+    presetId: "product-premium-sales",
+    assetType: "product",
+    deliveryTier: "premium-sales",
+    requiredSectors: ["front", "back", "left", "right", "top", "detail"],
+    requiredMeasurements: ["overall-length", "overall-width", "overall-height"],
+    requiredPhotoRoles: ["geometry_alignment", "material", "condition"],
+    requiredMaterialCategories: [],
+    requiredInspectionZones: ["exterior-surfaces", "functional-elements"],
+    conditionEvidenceRequired: false,
+    textureEvidenceRequired: true
   }
 } satisfies Record<string, DigitalViewingCapturePreset>;
 
@@ -676,18 +712,22 @@ export function evaluateDigitalViewingCapturePreset(input: unknown, presetInput:
           message: `Photo yaw must be within ${shot.captureRequirements.yawToleranceDeg} degrees of ${shot.captureRequirements.targetYawDeg}.`
         });
       }
-      if (shot.captureRequirements.angleType === "orthogonal" && shot.captureRequirements.pitchGuidance === "level") {
+      if (shot.captureRequirements.angleType === "orthogonal") {
         if (typeof photo.captureMetadata.pitchDeg !== "number") {
           blocking.push({
             id: photo.path,
             code: "photo_pitch_missing",
             message: "Premium orthogonal reference photos must declare numeric pitchDeg for Blender camera execution validation."
           });
-        } else if (Math.abs(photo.captureMetadata.pitchDeg) > 0.5) {
+        } else if (
+          typeof shot.captureRequirements.targetPitchDeg === "number"
+          && typeof shot.captureRequirements.pitchToleranceDeg === "number"
+          && Math.abs(photo.captureMetadata.pitchDeg - shot.captureRequirements.targetPitchDeg) > shot.captureRequirements.pitchToleranceDeg
+        ) {
           blocking.push({
             id: photo.path,
             code: "photo_pitch_out_of_tolerance",
-            message: "Photo pitch must be within 0.5 degrees of 0."
+            message: `Photo pitch must be within ${shot.captureRequirements.pitchToleranceDeg} degrees of ${shot.captureRequirements.targetPitchDeg}.`
           });
         }
         if (
@@ -870,11 +910,28 @@ function captureRequirementsForShot(
       ]
     };
   }
+  if (sector === "top") {
+    return {
+      angleType: "orthogonal",
+      cameraMode: "orthographic-reference",
+      targetPitchDeg: -90,
+      pitchToleranceDeg: 8,
+      pitchGuidance: "surface-normal",
+      lensGuidance: "normal-35-70mm-equivalent",
+      coverage: "full-object",
+      occlusionPolicy: "avoid",
+      measuredEndpointsVisible: roles.includes("geometry_alignment"),
+      textureEvidenceRequired: preset.textureEvidenceRequired,
+      notes: ["Capture directly overhead; do not label a level facade photo as the top sector."]
+    };
+  }
   return {
     angleType: "orthogonal",
     cameraMode: "orthographic-reference",
     targetYawDeg: yawForSector(sector),
     yawToleranceDeg: 12,
+    targetPitchDeg: 0,
+    pitchToleranceDeg: 0.5,
     pitchGuidance: "level",
     lensGuidance: "normal-35-70mm-equivalent",
     coverage: "full-object",
