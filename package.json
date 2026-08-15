@@ -39,10 +39,13 @@
   ],
   "scripts": {
     "audit:security": "pnpm audit --audit-level high",
+    "benchmark": "node dist/scripts/run-performance-benchmark.js",
+    "benchmark:xray": "node --cpu-prof --cpu-prof-dir=evidence --cpu-prof-name=performance.cpuprofile dist/scripts/run-performance-benchmark.js",
     "build": "tsc -p tsconfig.json && mkdir -p dist/blender && cp blender/*.py dist/blender/",
     "dev": "tsx src/server.ts",
     "lint": "eslint . --ext .ts",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage --exclude tests/goldenManifest.integration.test.ts",
     "start": "node dist/src/server.js"
   },
   "dependencies": {
@@ -52,6 +55,7 @@
   "devDependencies": {
     "@eslint/js": "^9.25.1",
     "@types/node": "^22.15.2",
+    "@vitest/coverage-v8": "3.2.7",
     "eslint": "^9.25.1",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",

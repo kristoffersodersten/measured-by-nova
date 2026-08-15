@@ -9,6 +9,7 @@ blender/__pycache__/
 .vitest/
 .coverage/
 coverage/
+evidence/
 .eslintcache
 *.log
 .env
