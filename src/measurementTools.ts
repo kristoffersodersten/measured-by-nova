@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { z } from "zod";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { BlenderConfig, BlenderToolResult } from "./contracts.js";
 import { runBlenderJob, safeOutputPath } from "./blenderRunner.js";
@@ -285,10 +285,31 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     }
     const outputBlend = path.join("measurement-projects", payload.projectId, "artifacts", `${payload.projectId}-export.blend`);
     const artifactPaths = portableExportPaths(payload.projectId, payload.formats, outputBlend);
-    if ((await Promise.all(artifactPaths.map((artifact) => pathExists(safeOutputPath(config.outputDir, artifact.path))))).some(Boolean)) {
-      return fail(req, "export_output_exists", "Portable export refuses to overwrite an existing artifact.");
+    const collisions = (await Promise.all(artifactPaths.map(async (artifact) => ({ artifact, exists: await pathExists(safeOutputPath(config.outputDir, artifact.path)) }))))
+      .filter((entry) => entry.exists)
+      .map((entry) => entry.artifact.path);
+    if (collisions.length > 0) {
+      return fail(req, "export_output_exists", `Portable export refuses to overwrite existing artifacts: ${collisions.join(", ")}`);
     }
-    const result = await runBlenderJob(config, { mode: "measurement_project", operation: "export_model", project, formats: payload.formats, sourceBlendPath: project.modelLock.modelArtifact }, outputBlend);
+    const snapshotPath = path.join("measurement-projects", payload.projectId, "artifacts", `.portable-export-${req}.blend`);
+    const snapshotAbsolutePath = safeOutputPath(config.outputDir, snapshotPath);
+    try {
+      await assertExistingPathWithinRoot(config.outputDir, safeOutputPath(config.outputDir, project.modelLock.modelArtifact));
+      await copyFile(safeOutputPath(config.outputDir, project.modelLock.modelArtifact), snapshotAbsolutePath);
+      const snapshotHash = createHash("sha256").update(await readFile(snapshotAbsolutePath)).digest("hex");
+      if (snapshotHash !== project.modelLock.modelHash) {
+        throw new Error("Locked Blender source changed while the immutable export snapshot was created.");
+      }
+    } catch (error) {
+      await rm(snapshotAbsolutePath, { force: true });
+      return fail(req, "model_lock_invalid", error instanceof Error ? error.message : String(error));
+    }
+    let result: BlenderToolResult;
+    try {
+      result = await runBlenderJob(config, { mode: "measurement_project", operation: "export_model", project, formats: payload.formats, sourceBlendPath: snapshotPath }, outputBlend);
+    } finally {
+      await rm(snapshotAbsolutePath, { force: true });
+    }
     if (!result.ok) {
       await Promise.all(artifactPaths.map((artifact) => rm(safeOutputPath(config.outputDir, artifact.path), { force: true })));
       return fail(req, "portable_export_failed", "Blender could not export the locked model; partial artifacts were removed.", [result.stderr]);
@@ -895,15 +916,17 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
-type PortableExportArtifact = { format: "blend" | "glb" | "obj"; path: string };
+type PortableExportArtifact = { format: "blend" | "glb" | "obj" | "mtl"; path: string };
 
 function portableExportPaths(projectId: string, formats: Array<"blend" | "glb" | "obj">, outputBlend: string): PortableExportArtifact[] {
   const base = path.dirname(outputBlend);
   const requested = new Set(formats);
   requested.add("blend");
-  return (["blend", "glb", "obj"] as const)
+  const artifacts: PortableExportArtifact[] = (["blend", "glb", "obj"] as const)
     .filter((format) => requested.has(format))
     .map((format) => ({ format, path: format === "blend" ? outputBlend : path.join(base, `${projectId}.${format}`) }));
+  if (requested.has("obj")) artifacts.push({ format: "mtl", path: path.join(base, `${projectId}.mtl`) });
+  return artifacts;
 }
 
 async function validatePortableExportArtifact(outputDir: string, artifact: PortableExportArtifact) {
@@ -918,10 +941,16 @@ async function validatePortableExportArtifact(outputDir: string, artifact: Porta
   if (artifact.format === "glb" && contents.subarray(0, 4).toString("ascii") !== "glTF") {
     throw new Error(`Portable GLB artifact has an invalid binary glTF header: ${artifact.path}`);
   }
-  if (artifact.format === "obj" && !/(^|\n)v\s+-?\d/m.test(contents.toString("utf8"))) {
+  if (artifact.format === "obj" && !bufferHasObjVertex(contents)) {
     throw new Error(`Portable OBJ artifact contains no vertex records: ${artifact.path}`);
   }
+  if (artifact.format === "mtl" && !contents.includes(Buffer.from("newmtl "))) throw new Error(`Portable MTL artifact contains no material records: ${artifact.path}`);
   return { ...artifact, sizeBytes: contents.byteLength, sha256: createHash("sha256").update(contents).digest("hex") };
+}
+
+function bufferHasObjVertex(contents: Buffer): boolean {
+  if (contents.subarray(0, 2).equals(Buffer.from("v "))) return true;
+  return contents.includes(Buffer.from("\nv ")) || contents.includes(Buffer.from("\rv "));
 }
 
 async function assertExistingPathWithinRoot(root: string, filePath: string): Promise<void> {
