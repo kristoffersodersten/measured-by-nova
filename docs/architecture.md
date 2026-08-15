@@ -43,6 +43,9 @@ capture_protocol
 - Export pipelines must not reconstruct, infer, or mutate geometry after model lock.
 - The LLM may orchestrate, but it may not decide geometry truth.
 - Missing data must create warnings or failures, not guesses.
+- Source-photo projection requires explicit anchors, content identity,
+  uncertainty and reprojection thresholds; it may duplicate a mesh for visual
+  material application but may not change locked geometry coordinates.
 
 ## Determinism
 

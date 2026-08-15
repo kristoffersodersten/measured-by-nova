@@ -65,7 +65,7 @@ try {
     await client.connect(transport);
     const listed = await client.listTools();
     tools = listed.tools.map((tool) => tool.name).sort();
-    if (!tools.includes("create_measurement_project") || !tools.includes("render_digital_viewing_preview")) {
+    if (!["create_measurement_project", "render_digital_viewing_preview", "align_and_project_source_photo"].every((tool) => tools.includes(tool))) {
       throw new Error("release_mcp_tools_missing");
     }
   } finally {
@@ -85,7 +85,7 @@ const evidence = {
   schemaVersion: 1,
   commit,
   package: { name: "nova-measured", version: "0.1.0", filename, sha256: firstSha, bytes: firstBytes.length, reproducible: true },
-  cleanInstall: { ok: true, toolCount: tools.length, requiredTools: ["create_measurement_project", "render_digital_viewing_preview"] },
+  cleanInstall: { ok: true, toolCount: tools.length, requiredTools: ["create_measurement_project", "render_digital_viewing_preview", "align_and_project_source_photo"] },
   blender: { path: blenderPath, version: blenderVersion },
   productBoundary: { ok: true, entries: entries.length, forbidden: [] },
   recovery: { corruptedHashRejected: true, temporaryInstallRemoved: true }

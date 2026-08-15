@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -936,4 +936,86 @@ describe("measurement MCP digital viewing tools", () => {
     expect(deliveryPackage.photorealQualityChecklist.every((item) => item.trace.renderManifestHash === deliveryPackage.hashes.renderManifestHash)).toBe(true);
     expect(deliveryPackage.photorealQualityChecklist.some((item) => item.trace.materialConditionReportHash === deliveryPackage.hashes.materialConditionReportHash)).toBe(true);
   });
+
+  it("reports a causal source-projection preflight failure before Blender execution", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "nova-source-projection-tool-"));
+    const tool = makeToolHarness(outputDir).get("align_and_project_source_photo");
+    expect(tool).toBeDefined();
+    const result = await tool!.handler({
+      schemaVersion: 1,
+      projectId: "projection-proof",
+      sourceBlendPath: "sources/projection-proof.locked.blend",
+      outputBlendPath: "projections/projection-proof.projected.blend",
+      outputReportPath: "projections/projection-proof.report.json",
+      sourcePhoto: { path: "photos/missing.png", sizeBytes: 100, sha256: "a".repeat(64), pixelWidth: 100, pixelHeight: 100 },
+      target: { hostElementId: "Facade", face: "front", widthMm: 1000, heightMm: 500, dimensionToleranceMm: 2 },
+      anchors: [
+        { id: "a", sourcePx: { x: 0, y: 100 }, targetMm: { x: 0, y: 0 }, uncertaintyPx: 0 },
+        { id: "b", sourcePx: { x: 100, y: 100 }, targetMm: { x: 1000, y: 0 }, uncertaintyPx: 0 },
+        { id: "c", sourcePx: { x: 100, y: 0 }, targetMm: { x: 1000, y: 500 }, uncertaintyPx: 0 },
+        { id: "d", sourcePx: { x: 0, y: 0 }, targetMm: { x: 0, y: 500 }, uncertaintyPx: 0 }
+      ],
+      thresholds: { inlierErrorPx: 0.5, maxRmsePx: 0.5, minInlierRatio: 1 }
+    });
+    const body = JSON.parse(result.content[0].text) as { error: { code: string } };
+    expect(result.isError).toBe(true);
+    expect(body.error.code).toBe("source_projection_photo_missing");
+  });
+
+  it("rejects source-projection inputs that escape through symlinks", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "nova-source-projection-root-"));
+    const outsideDir = await mkdtemp(path.join(tmpdir(), "nova-source-projection-outside-"));
+    await mkdir(path.join(outputDir, "photos"), { recursive: true });
+    await mkdir(path.join(outputDir, "sources"), { recursive: true });
+    await writeFile(path.join(outsideDir, "photo.png"), "private-photo");
+    await writeFile(path.join(outsideDir, "locked.blend"), "private-blend");
+    await symlink(path.join(outsideDir, "photo.png"), path.join(outputDir, "photos", "source.png"));
+    await symlink(path.join(outsideDir, "locked.blend"), path.join(outputDir, "sources", "locked.blend"));
+
+    const tool = makeToolHarness(outputDir).get("align_and_project_source_photo")!;
+    const result = await tool.handler(sourceProjectionInput());
+    const body = JSON.parse(result.content[0].text) as { error: { code: string } };
+
+    expect(result.isError).toBe(true);
+    expect(body.error.code).toBe("source_projection_path_escape");
+    expect(await readFile(path.join(outsideDir, "photo.png"), "utf8")).toBe("private-photo");
+    expect(await readFile(path.join(outsideDir, "locked.blend"), "utf8")).toBe("private-blend");
+  });
+
+  it("rejects source-projection output parents that escape through symlinks", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "nova-source-projection-root-"));
+    const outsideDir = await mkdtemp(path.join(tmpdir(), "nova-source-projection-outside-"));
+    await mkdir(path.join(outputDir, "photos"), { recursive: true });
+    await mkdir(path.join(outputDir, "sources"), { recursive: true });
+    await writeFile(path.join(outputDir, "photos", "source.png"), "photo");
+    await writeFile(path.join(outputDir, "sources", "locked.blend"), "blend");
+    await symlink(outsideDir, path.join(outputDir, "projections"));
+
+    const tool = makeToolHarness(outputDir).get("align_and_project_source_photo")!;
+    const result = await tool.handler(sourceProjectionInput());
+    const body = JSON.parse(result.content[0].text) as { error: { code: string } };
+
+    expect(result.isError).toBe(true);
+    expect(body.error.code).toBe("source_projection_path_escape");
+    expect(await readFile(path.join(outputDir, "photos", "source.png"), "utf8")).toBe("photo");
+  });
 });
+
+function sourceProjectionInput(): Record<string, unknown> {
+  return {
+    schemaVersion: 1,
+    projectId: "projection-proof",
+    sourceBlendPath: "sources/locked.blend",
+    outputBlendPath: "projections/projected.blend",
+    outputReportPath: "projections/report.json",
+    sourcePhoto: { path: "photos/source.png", sizeBytes: 5, sha256: "a".repeat(64), pixelWidth: 100, pixelHeight: 100 },
+    target: { hostElementId: "Facade", face: "front", widthMm: 1000, heightMm: 500, dimensionToleranceMm: 2 },
+    anchors: [
+      { id: "a", sourcePx: { x: 0, y: 100 }, targetMm: { x: 0, y: 0 }, uncertaintyPx: 0 },
+      { id: "b", sourcePx: { x: 100, y: 100 }, targetMm: { x: 1000, y: 0 }, uncertaintyPx: 0 },
+      { id: "c", sourcePx: { x: 100, y: 0 }, targetMm: { x: 1000, y: 500 }, uncertaintyPx: 0 },
+      { id: "d", sourcePx: { x: 0, y: 0 }, targetMm: { x: 0, y: 500 }, uncertaintyPx: 0 }
+    ],
+    thresholds: { inlierErrorPx: 0.5, maxRmsePx: 0.5, minInlierRatio: 1 }
+  };
+}

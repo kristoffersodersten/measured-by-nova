@@ -10,6 +10,7 @@ import {
   validateDigitalViewingCapture
 } from "../src/digitalViewingContracts.js";
 import { evaluatePerformanceEvidence, PerformanceEvidenceSchema } from "../src/performanceEvidence.js";
+import { buildSourceProjectionManifest } from "../src/sourceProjection.js";
 
 const samples = 50;
 const outputArgument = process.argv[2] ?? "evidence/performance.json";
@@ -37,6 +38,17 @@ const preset = {
   lighting: { environment: "studio", colorTemperatureK: 5600, intensity: 1 },
   outputPath: "renders/vehicle-performance.png"
 };
+const sourceProjectionInput = {
+  schemaVersion: 1 as const, projectId: "benchmark", sourceBlendPath: "sources/benchmark.locked.blend", outputBlendPath: "projections/benchmark.blend", outputReportPath: "projections/benchmark.json",
+  sourcePhoto: { path: "photos/benchmark.png", sizeBytes: 1024, sha256: "a".repeat(64), pixelWidth: 4000, pixelHeight: 3000 },
+  target: { hostElementId: "BenchmarkSurface", face: "front" as const, widthMm: 2000, heightMm: 1000, dimensionToleranceMm: 2 },
+  anchors: [
+    { id: "a", sourcePx: { x: 200, y: 2800 }, targetMm: { x: 0, y: 0 }, uncertaintyPx: 0.25 },
+    { id: "b", sourcePx: { x: 3800, y: 2800 }, targetMm: { x: 2000, y: 0 }, uncertaintyPx: 0.25 },
+    { id: "c", sourcePx: { x: 3800, y: 200 }, targetMm: { x: 2000, y: 1000 }, uncertaintyPx: 0.25 },
+    { id: "d", sourcePx: { x: 200, y: 200 }, targetMm: { x: 0, y: 1000 }, uncertaintyPx: 0.25 }
+  ], thresholds: { inlierErrorPx: 0.5, maxRmsePx: 0.5, minInlierRatio: 1 }
+};
 
 function measure(operation: () => void): { samples: number; p95Ms: number } {
   const values: number[] = [];
@@ -50,6 +62,7 @@ function measure(operation: () => void): { samples: number; p95Ms: number } {
 }
 
 for (let index = 0; index < 10; index += 1) validateDigitalViewingCapture(capture);
+for (let index = 0; index < 10; index += 1) buildSourceProjectionManifest(sourceProjectionInput);
 const warmedRenderManifest = buildDigitalViewingRenderManifest(capture, preset);
 for (let index = 0; index < 10; index += 1) {
   buildDigitalViewingRenderManifest(capture, preset);
@@ -61,6 +74,7 @@ const renderManifest = buildDigitalViewingRenderManifest(capture, preset);
 const renderManifestMetric = measure(() => buildDigitalViewingRenderManifest(capture, preset));
 const packageManifest = buildDigitalViewingDeliveryPackageManifest(capture, renderManifest);
 const packageManifestMetric = measure(() => buildDigitalViewingDeliveryPackageManifest(capture, renderManifest));
+const sourceProjectionAlignment = measure(() => buildSourceProjectionManifest(sourceProjectionInput));
 const serializedPackage = serializeDigitalViewingDeliveryPackageManifest(packageManifest);
 const rssDeltaBytes = Math.max(0, process.memoryUsage().rss - rssBefore);
 const blenderRuntime = process.env.MEASURED_BLENDER_RUNTIME_MS;
@@ -70,6 +84,7 @@ const evidence = evaluatePerformanceEvidence(commit, {
   captureValidation,
   renderManifest: renderManifestMetric,
   packageManifest: packageManifestMetric,
+  sourceProjectionAlignment,
   rssDeltaBytes,
   packageBytes: Buffer.byteLength(serializedPackage),
   blenderRuntimeMs: Number(blenderRuntime)

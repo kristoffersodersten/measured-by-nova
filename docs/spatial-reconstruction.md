@@ -243,5 +243,9 @@ Automation runs locally by default:
 
 - TypeScript MCP server validates contracts and state.
 - Python/Blender bridge generates, refines, renders, and exports geometry.
-- Future OpenCV/COLMAP integration may provide local feature matching, camera pose estimation, and texture projection.
+- Deterministic planar photo alignment and source-backed Blender projection are
+  available through `align_and_project_source_photo`; explicit anchors,
+  uncertainty and fail-closed reprojection thresholds are mandatory. Future
+  OpenCV/COLMAP integration may propose anchors or poses locally but may not
+  become dimensional authority or bypass operator review.
 - Export steps produce deterministic manifests and never mutate locked geometry.
