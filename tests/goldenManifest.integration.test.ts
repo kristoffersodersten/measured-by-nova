@@ -399,6 +399,32 @@ describe("golden manifest integration", () => {
     expect(pdf.match(/\/Subtype \/Image/g)).toHaveLength(4);
     expect(pdf).toContain("MARKLINJE / EXISTING GROUND REFERENCE");
     expect(pdf).toContain("Measured Blender visualization - not CAD, BIM or survey output");
+    expect(pdf).toContain("xref\n");
+    expect(pdf).toContain("startxref\n");
+    expect(pdf).not.toMatch(/placeholder/i);
+
+    const permitOutputDir = path.join(outputDir, "customer-delivery", "permit");
+    const permitResult = await runBlenderJob(
+      { outputDir, timeoutMs: 120_000 },
+      {
+        mode: "measurement_project",
+        operation: "export_template",
+        project,
+        template: "permit",
+        templateOutputDir: permitOutputDir,
+        options: { scale: "1:100", lockedModel: project.modelLock }
+      },
+      path.join("customer-delivery", "permit", `${project.projectId}-permit.blend`)
+    );
+    expect(permitResult.ok, permitResult.stderr).toBe(true);
+    const permitPdfPath = path.join(permitOutputDir, `${project.projectId}-permit.pdf`);
+    const permitPdf = await readFile(permitPdfPath, "latin1");
+    expect(permitPdf).toContain("MEASURED BY NOVA - PERMIT");
+    expect(permitPdf).toContain("xref\n");
+    expect(permitPdf).toContain("startxref\n");
+    expect(permitPdf.trimEnd().endsWith("%%EOF")).toBe(true);
+    expect(permitPdf).not.toMatch(/placeholder/i);
+    await expect(stat(path.join(permitOutputDir, `.${project.projectId}-permit.pdf.partial`))).rejects.toThrow();
     expect(manifest.capabilityManifest.supportedTemplates).toContain("gothenburg-permit");
     expect(Object.keys(manifest.artifacts)).toEqual([
       "eastPng",
@@ -427,7 +453,7 @@ describe("golden manifest integration", () => {
       validation: "synthetic-carport-gothenburg-permit-validation.json"
     });
     expect(stableJson(repeatedManifest)).toBe(stableJson(manifest));
-  }, 180_000);
+  }, 220_000);
 
   it("renders a digital viewing preview from a locked Blender source and render manifest", async () => {
     const outputDir = await mkdtemp(path.join(os.tmpdir(), "nova-measured-render-"));
