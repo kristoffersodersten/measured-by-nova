@@ -1,5 +1,16 @@
 # Release Checklist
 
+## GitHub admission
+
+- `quality` must pass frozen install, dependency audit, lint, build, and all
+  non-Blender tests on the pull-request SHA.
+- `blender-runtime` must pass the full Blender integration and negative-path
+  suite on the same SHA using Ubuntu 24.04's declared APT package source.
+- Both jobs use commit-pinned GitHub Actions and emit no write credentials.
+- `main` requires both checks after this workflow has completed successfully.
+- The runtime job uploads commit-, run-, Node-, pnpm-, runner-, and
+  exact Blender package/version identity evidence for auditability.
+
 ## Pre-Release
 
 - [ ] Product name is `Measured by Nova`.
