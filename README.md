@@ -244,6 +244,10 @@ Supported export templates are `permit`, `permit-facade-pack`, `swedish-municipa
 
 ## Development
 
+Performance budgets, repeatable Hetzner/GitHub benchmarks, atomic evidence,
+and CPU X-Ray profiling are documented in
+[`docs/performance-evidence.md`](docs/performance-evidence.md).
+
 ```bash
 pnpm install
 pnpm build

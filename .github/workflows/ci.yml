@@ -30,7 +30,14 @@ jobs:
       - run: pnpm audit --audit-level high
       - run: pnpm lint
       - run: pnpm build
-      - run: pnpm vitest run --exclude tests/goldenManifest.integration.test.ts
+      - run: pnpm test:coverage
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1 (Node 24)
+        if: always()
+        with:
+          name: measured-coverage-evidence-${{ github.sha }}
+          path: evidence/coverage/
+          if-no-files-found: error
+          retention-days: 30
 
   blender-runtime:
     name: blender-runtime
@@ -53,7 +60,12 @@ jobs:
       - name: Run Blender end-to-end and negative paths
         env:
           BLENDER_PATH: /usr/bin/blender
-        run: pnpm vitest run tests/goldenManifest.integration.test.ts
+        run: |
+          started_at=$(date +%s%3N)
+          pnpm vitest run tests/goldenManifest.integration.test.ts
+          completed_at=$(date +%s%3N)
+          blender_runtime_ms=$((completed_at - started_at))
+          MEASURED_BLENDER_RUNTIME_MS="$blender_runtime_ms" pnpm benchmark:xray
       - name: Record exact execution identity
         if: always()
         run: |
