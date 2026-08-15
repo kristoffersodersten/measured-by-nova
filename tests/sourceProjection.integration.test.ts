@@ -31,7 +31,7 @@ describe("source projection Blender runtime", () => {
     const projected = await runBlenderJob(config, buildSourceProjectionBlenderJob(projectionInput, alignment), projectionInput.outputBlendPath);
     expect(projected.ok, projected.stderr).toBe(true);
     const report = SourceProjectionExecutionReportSchema.parse(JSON.parse(await readFile(path.join(outputDir, projectionInput.outputReportPath), "utf8")));
-    expect(report).toMatchObject({ ok: true, roundTripVerified: true, alignmentManifestHash: alignment.manifestHash, hostElementId: "Facade", face: "front", selectedPolygonCount: 1, uvRange: { minU: 0.1, maxU: 0.9, minV: 0.1, maxV: 0.9 }, geometry: { mutationDetected: false } });
+    expect(report).toMatchObject({ ok: true, roundTripVerified: true, sourcePhotoPacked: true, alignmentManifestHash: alignment.manifestHash, hostElementId: "Facade", face: "front", selectedPolygonCount: 1, uvRange: { minU: 0.1, maxU: 0.9, minV: 0.1, maxV: 0.9 }, geometry: { mutationDetected: false } });
     expect(report.geometry.sourceHashBefore).toBe(report.geometry.sourceHashAfter);
     expect(report.geometry.sourceHashBefore).toBe(report.geometry.projectedCopyHash);
     expect((await readdir(path.join(outputDir, "projections"))).some((entry) => entry.includes("validation.blend"))).toBe(false);

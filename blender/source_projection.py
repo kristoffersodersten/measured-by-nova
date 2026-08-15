@@ -57,8 +57,17 @@ def projection_axes(face):
     return (0, 1)
 
 
+def projection_normal_axis(face):
+    if face in ("front", "rear"):
+        return 1
+    if face in ("left", "right"):
+        return 0
+    return 2
+
+
 def source_projection_material(photo_path, manifest_hash):
     image = bpy.data.images.load(str(photo_path), check_existing=False)
+    image.pack()
     material = bpy.data.materials.new(f"SourceProjection-{manifest_hash[:12]}")
     material.use_nodes = True
     nodes = material.node_tree.nodes
@@ -106,11 +115,17 @@ def apply_source_projection(payload):
     if not selected_polygons:
         raise ValueError(f"Source projection target face has no planar polygons: {target['face']}")
     horizontal_axis, vertical_axis = projection_axes(target["face"])
+    normal_axis = projection_normal_axis(target["face"])
     vertices = [duplicate.data.vertices[index].co for polygon in selected_polygons for index in polygon.vertices]
     horizontal_values = [vertex[horizontal_axis] for vertex in vertices]
     vertical_values = [vertex[vertical_axis] for vertex in vertices]
     horizontal_min, horizontal_max = min(horizontal_values), max(horizontal_values)
     vertical_min, vertical_max = min(vertical_values), max(vertical_values)
+    normal_values = [vertex[normal_axis] for vertex in vertices]
+    if max(normal_values) - min(normal_values) > 1e-6:
+        raise ValueError("Source projection target face spans multiple parallel planes")
+    if horizontal_max - horizontal_min <= 1e-9 or vertical_max - vertical_min <= 1e-9:
+        raise ValueError("Source projection target face has zero-area planar bounds")
     width_mm = (horizontal_max - horizontal_min) * 1000
     height_mm = (vertical_max - vertical_min) * 1000
     tolerance = target["dimensionToleranceMm"]
@@ -141,6 +156,7 @@ def apply_source_projection(payload):
     duplicate_name = duplicate.name
     host_name = host.name
     material_name = material.name
+    image_name = image.name
     output_path = Path(payload["outputPath"])
     output_path.parent.mkdir(parents=True, exist_ok=True)
     validation_path = output_path.parent / f".{output_path.name}.{alignment['manifestHash'][:12]}.validation.blend"
@@ -157,6 +173,9 @@ def apply_source_projection(payload):
             raise ValueError("Locked source geometry did not survive Blender save/reopen validation")
         if geometry_hash(persisted) != duplicate_geometry_hash or not any(slot and slot.name == material_name for slot in persisted.data.materials):
             raise ValueError("Source projection material or geometry identity failed Blender save/reopen validation")
+        persisted_image = bpy.data.images.get(image_name)
+        if persisted_image is None or persisted_image.packed_file is None:
+            raise ValueError("Source projection photo was not packed into the derived Blender artifact")
     finally:
         validation_path.unlink(missing_ok=True)
     report = {
@@ -165,6 +184,7 @@ def apply_source_projection(payload):
         "ok": True,
         "alignmentManifestHash": alignment["manifestHash"],
         "sourcePhotoIdentity": actual_identity,
+        "sourcePhotoPacked": True,
         "sourceBlendPath": payload["sourceBlendPath"],
         "projectedObject": duplicate_name,
         "hostElementId": target["hostElementId"],

@@ -12,9 +12,9 @@ const PointSchema = z.object({ x: z.number().finite().nonnegative(), y: z.number
 export const SourceProjectionInputSchema = z.object({
   schemaVersion: z.literal(1),
   projectId: z.string().min(1).max(120).regex(/^[a-zA-Z0-9_.-]+$/),
-  sourceBlendPath: BlendPathSchema.refine((value) => value.startsWith("sources/") || value.startsWith("measurement-projects/")),
-  outputBlendPath: BlendPathSchema.refine((value) => value.startsWith("projections/")),
-  outputReportPath: RelativePathSchema.refine((value) => value.startsWith("projections/") && value.endsWith(".json")),
+  sourceBlendPath: BlendPathSchema.refine((value) => value.startsWith("sources/") || value.startsWith("measurement-projects/"), { message: "Source blend must be under sources/ or measurement-projects/." }),
+  outputBlendPath: BlendPathSchema.refine((value) => value.startsWith("projections/"), { message: "Projection blend output must be under projections/." }),
+  outputReportPath: RelativePathSchema.refine((value) => value.startsWith("projections/") && value.endsWith(".json"), { message: "Projection report must be a .json file under projections/." }),
   sourcePhoto: z.object({
     path: RelativePathSchema,
     sizeBytes: z.number().int().positive(),
@@ -121,6 +121,7 @@ export const SourceProjectionExecutionReportSchema = z.object({
   ok: z.literal(true),
   alignmentManifestHash: z.string().regex(/^[a-f0-9]{64}$/),
   sourcePhotoIdentity: z.object({ path: RelativePathSchema, sizeBytes: z.number().int().positive(), sha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict(),
+  sourcePhotoPacked: z.literal(true),
   sourceBlendPath: SourceProjectionInputSchema.shape.sourceBlendPath,
   projectedObject: z.string().min(1),
   hostElementId: SourceProjectionInputSchema.shape.target.shape.hostElementId,

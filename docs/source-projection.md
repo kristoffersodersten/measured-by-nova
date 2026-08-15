@@ -2,7 +2,7 @@
 
 `align_and_project_source_photo` is the deterministic local-first boundary for
 planar photo alignment and Blender texture projection. It consumes an exact
-locked `.blend`, a content-addressed source image, a measured planar target and
+project model-lock artifact, a content-addressed source image, a measured planar target and
 at least four explicit operator anchors.
 
 The operation computes a normalized planar homography from target millimetres
@@ -14,6 +14,9 @@ alignment manifest; it is never converted into geometry confidence.
 ## Authority boundary
 
 - Measurements and locked Blender geometry remain geometry authority.
+- The requested source blend must equal the project's model-lock artifact and pass current source-project and artifact-hash validation.
+- The verified source image bytes are packed into the derived blend so later source-file drift cannot change the recorded projection.
+- All selected target polygons must occupy one coplanar surface with non-zero bounds.
 - Alignment and projection are visual evidence only.
 - The source `.blend` is never overwritten.
 - Blender duplicates the target mesh, preserves every vertex coordinate and
@@ -29,7 +32,7 @@ alignment manifest; it is never converted into geometry confidence.
 {
   "schemaVersion": 1,
   "projectId": "facade-proof",
-  "sourceBlendPath": "sources/facade-proof.locked.blend",
+  "sourceBlendPath": "measurement-projects/facade-proof/artifacts/facade-proof.blend",
   "outputBlendPath": "projections/facade-proof.projected.blend",
   "outputReportPath": "projections/facade-proof.report.json",
   "sourcePhoto": {

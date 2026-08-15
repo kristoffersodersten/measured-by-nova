@@ -549,6 +549,19 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     } catch {
       return fail(req, "source_projection_path_escape", "Projection input or output resolves outside the configured output root.");
     }
+    let project;
+    try {
+      project = materializeProfiles(await readProject(config, input.projectId));
+    } catch (error) {
+      return fail(req, "source_projection_model_lock_invalid", error instanceof Error ? error.message : String(error));
+    }
+    if (project.modelLock.modelArtifact !== input.sourceBlendPath) {
+      return fail(req, "source_projection_model_lock_invalid", "Projection source must be the exact Blender artifact declared by the project model lock.");
+    }
+    const lockValidation = await validateModelLock(config, project);
+    if (!lockValidation.ok) {
+      return fail(req, "source_projection_model_lock_invalid", "Projection source no longer matches the reviewed model lock.", lockValidation.blocking.map((reason) => `${reason.code}: ${reason.message}`));
+    }
     const sourcePhoto = await readFile(sourcePhotoPath);
     const sourcePhotoStat = await stat(sourcePhotoPath);
     const sourceBlendStat = await stat(sourceBlendPath);
@@ -574,7 +587,15 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     let report;
     try {
       report = SourceProjectionExecutionReportSchema.parse(JSON.parse(await readFile(outputReportPath, "utf8")));
-      if (report.alignmentManifestHash !== alignment.manifestHash || report.sourcePhotoIdentity.sha256 !== input.sourcePhoto.sha256) {
+      if (
+        report.alignmentManifestHash !== alignment.manifestHash
+        || report.sourcePhotoIdentity.path !== input.sourcePhoto.path
+        || report.sourcePhotoIdentity.sizeBytes !== input.sourcePhoto.sizeBytes
+        || report.sourcePhotoIdentity.sha256 !== input.sourcePhoto.sha256
+        || report.sourceBlendPath !== input.sourceBlendPath
+        || report.hostElementId !== input.target.hostElementId
+        || report.face !== input.target.face
+      ) {
         throw new Error("Projection execution report does not match the alignment or source photo identity.");
       }
     } catch (error) {
