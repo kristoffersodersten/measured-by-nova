@@ -41,6 +41,11 @@ Public tools may also expose these reasons under `error.details.blocking` so UI 
 
 Legacy exports may remain for development, but public product flows should use `export_facade_completion_pack`.
 
+Customer-facing PDF artifacts are written atomically and rejected unless they
+contain a complete PDF header, cross-reference table, trailer, and EOF marker.
+Placeholder content is forbidden. A failed write leaves no `.partial` artifact,
+and the export manifest cannot claim a missing or structurally invalid delivery.
+
 ## Test Strategy
 
 Minimum tests:
