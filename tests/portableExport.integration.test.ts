@@ -35,7 +35,7 @@ describe("locked portable export Blender runtime", () => {
     registerMeasurementTools(server, config);
     const result = await tools.get("export_model")!({ projectId, formats: ["glb", "obj"], executionIntent: exportIntent() });
     const body = JSON.parse(result.content[0].text) as { data: { sourceBlendPath: string; artifacts: Array<{ format: string; path: string; sizeBytes: number; sha256: string }> } };
-    expect(result.isError).toBe(false);
+    expect(result.isError, result.content[0].text).toBe(false);
     expect(body.data.sourceBlendPath).toBe(sourceBlendPath);
     expect(body.data.artifacts.map((artifact) => artifact.format)).toEqual(["blend", "glb", "obj"]);
     expect(body.data.artifacts.every((artifact) => artifact.sizeBytes > 0 && artifact.sha256.length === 64)).toBe(true);
