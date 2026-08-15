@@ -46,7 +46,7 @@ describe("locked portable export Blender runtime", () => {
     const driftBody = JSON.parse(drifted.content[0].text) as { error: { code: string } };
     expect(drifted.isError).toBe(true);
     expect(driftBody.error.code).toBe("model_lock_invalid");
-    expect((await stat(path.join(outputDir, body.data.artifacts[0]!.path))).isFile()).toBe(true);
+    expect((await stat(path.join(outputDir, body.data.artifacts[0].path))).isFile()).toBe(true);
   }, 120_000);
 });
 
