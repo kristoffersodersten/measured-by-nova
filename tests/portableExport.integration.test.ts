@@ -22,7 +22,7 @@ describe("locked portable export Blender runtime", () => {
       schemaVersion: 1,
       projectId,
       unit: "mm",
-      elements: [{ id: "measured-panel", kind: "panel", boundsMm: { x: 0, y: 0, z: 0, width: 1000, depth: 100, height: 500 }, confidence: "high", source: "dimension" }],
+      elements: [{ id: "measured-panel", kind: "panel", boundsMm: { x: 0, y: 0, z: 0, width: 1000, depth: 100, height: 500 }, confidence: "high", source: "dimension", metadata: { captureContractV2: true } }],
       artifacts: { blend: sourceBlendPath }
     });
     const generated = await runBlenderJob(config, { mode: "measurement_project", operation: "generate_model", project }, sourceBlendPath);
