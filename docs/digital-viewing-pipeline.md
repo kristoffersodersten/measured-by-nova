@@ -364,6 +364,16 @@ and interior-finish material evidence. Broker output can therefore show
 surface quality and condition without letting photos become hidden dimensional
 authority.
 
+Vehicle dimensions, boat LOA/beam, and property dimensions declare
+`geometryValidation: axis-extent`. This method is restricted to millimetres and
+the x/y/z axes. Blender requires the locked host to be unparented and aligned to
+the anchor's declared reference frame, then reads its extent on the declared
+axis and blocks before rendering when the difference exceeds tolerance. Boat
+draft remains a waterline-to-keel anchor and is not misclassified as full hull
+height. The runtime integration suite renders all three domains and also proves
+that mismatched locked geometry cannot replace or corrupt the previously valid
+render artifact.
+
 The carport fixture in `fixtures/digital-viewing-carport-capture.json` proves
 the exterior-structure/property-style path. It uses verified dimensions for
 width, depth, height, roof slope, step dimensions, and boundary distance while
@@ -837,8 +847,8 @@ The render manifest must record:
 - render preset hash for camera, renderer, resolution, lighting, and output path
 - manifest hash
 - declared renderable model element registry used for host binding
-- measurement anchors with declared value, unit, tolerance, and source-of-truth
-  metadata
+- measurement anchors with declared value, unit, tolerance, source-of-truth,
+  and an explicit geometry-validation method when Blender readback is required
 - source-backed PBR material records
 - enforced domain capture preset identity and requirements
 - material surface mapping for deterministic Blender texture placement
@@ -899,9 +909,10 @@ because otherwise the render could silently diverge from the measured capture
 contract.
 
 Blender execution must also write back every verified geometry measurement it
-used as an applied measurement anchor, including the declared `value`, `unit`,
-optional `tolerance`, and `sourceOfTruth:
-declared-measurement-value-used-by-blender`. Premium delivery-package generation
+used as an applied measurement anchor. An `axis-extent` anchor additionally
+records axis, actual locked-host extent, difference, tolerance, and
+`withinTolerance: true`; an out-of-tolerance extent is a blocking pre-render
+error. Premium delivery-package generation
 compares those Blender execution values against the capture measurements and
 blocks when any value is missing or mismatched. This keeps measurements as the
 single source of truth through photorealistic rendering.

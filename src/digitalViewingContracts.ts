@@ -122,11 +122,12 @@ export const DigitalViewingMeasurementPlacementSchema = z.object({
   axis: z.enum(["x", "y", "z", "slope", "distance"]),
   from: z.string().min(1).max(120),
   to: z.string().min(1).max(120),
+  geometryValidation: z.enum(["axis-extent"]).optional(),
   referenceFrame: z.enum(["asset-local", "site-local", "world"]).default("asset-local")
 }).strict();
 export type DigitalViewingMeasurementPlacement = z.infer<typeof DigitalViewingMeasurementPlacementSchema>;
 
-export const DigitalViewingMeasurementSchema = z.object({
+const DigitalViewingMeasurementObjectSchema = z.object({
   id: IdSchema,
   label: z.string().min(1).max(160),
   value: z.number().finite(),
@@ -138,6 +139,15 @@ export const DigitalViewingMeasurementSchema = z.object({
   placement: DigitalViewingMeasurementPlacementSchema.optional(),
   affectsGeometry: z.literal(true)
 }).strict();
+export const DigitalViewingMeasurementSchema = DigitalViewingMeasurementObjectSchema.superRefine((measurement, context) => {
+  if (measurement.placement?.geometryValidation !== "axis-extent") return;
+  if (measurement.unit !== "mm") {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["unit"], message: "axis-extent geometry validation requires unit mm" });
+  }
+  if (!["x", "y", "z"].includes(measurement.placement.axis)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["placement", "axis"], message: "axis-extent geometry validation requires axis x, y, or z" });
+  }
+});
 export type DigitalViewingMeasurement = z.infer<typeof DigitalViewingMeasurementSchema>;
 
 export const DigitalViewingModelElementSchema = z.object({
@@ -456,7 +466,7 @@ export const DigitalViewingCaptureGuideSchema = z.object({
     geometryAuthority: z.literal(true),
     verificationRequired: z.literal(true),
     placementRequired: z.boolean(),
-    unit: DigitalViewingMeasurementSchema.shape.unit,
+    unit: DigitalViewingMeasurementObjectSchema.shape.unit,
     instructions: z.array(z.string().min(1)).min(1)
   }).strict()),
   materialChecklist: z.array(z.object({
@@ -584,9 +594,10 @@ export const DigitalViewingRenderManifestSchema = z.object({
     hostElementId: IdSchema,
     axis: DigitalViewingMeasurementPlacementSchema.shape.axis,
     referenceFrame: DigitalViewingMeasurementPlacementSchema.shape.referenceFrame,
-    value: DigitalViewingMeasurementSchema.shape.value,
-    unit: DigitalViewingMeasurementSchema.shape.unit,
-    tolerance: DigitalViewingMeasurementSchema.shape.tolerance,
+    value: DigitalViewingMeasurementObjectSchema.shape.value,
+    unit: DigitalViewingMeasurementObjectSchema.shape.unit,
+    tolerance: DigitalViewingMeasurementObjectSchema.shape.tolerance,
+    geometryValidation: DigitalViewingMeasurementPlacementSchema.shape.geometryValidation,
     sourceOfTruth: z.literal("declared-measurement-value-used-by-blender")
   }).strict()),
   materials: z.array(z.object({
@@ -654,9 +665,15 @@ export const DigitalViewingRenderManifestSchema = z.object({
         measurementId: IdSchema,
         hostElementId: IdSchema,
         referenceFrame: DigitalViewingMeasurementPlacementSchema.shape.referenceFrame,
-        value: DigitalViewingMeasurementSchema.shape.value.optional(),
-        unit: DigitalViewingMeasurementSchema.shape.unit.optional(),
-        tolerance: DigitalViewingMeasurementSchema.shape.tolerance,
+        value: DigitalViewingMeasurementObjectSchema.shape.value.optional(),
+        unit: DigitalViewingMeasurementObjectSchema.shape.unit.optional(),
+        tolerance: DigitalViewingMeasurementObjectSchema.shape.tolerance,
+        axis: DigitalViewingMeasurementPlacementSchema.shape.axis.optional(),
+        geometryValidation: DigitalViewingMeasurementPlacementSchema.shape.geometryValidation,
+        referenceFrameReadback: DigitalViewingMeasurementPlacementSchema.shape.referenceFrame.optional(),
+        actualValue: z.number().finite().optional(),
+        difference: z.number().finite().nonnegative().optional(),
+        withinTolerance: z.boolean().optional(),
         sourceOfTruth: z.literal("declared-measurement-value-used-by-blender").optional()
       }).strict()).default([])
     }).strict().optional(),
@@ -714,10 +731,10 @@ export const DigitalViewingMaterialConditionReportSchema = z.object({
     id: IdSchema,
     label: z.string(),
     value: z.number(),
-    tolerance: DigitalViewingMeasurementSchema.shape.tolerance,
-    unit: DigitalViewingMeasurementSchema.shape.unit,
+    tolerance: DigitalViewingMeasurementObjectSchema.shape.tolerance,
+    unit: DigitalViewingMeasurementObjectSchema.shape.unit,
     confidence: ConfidenceSchema,
-    source: DigitalViewingMeasurementSchema.shape.source,
+    source: DigitalViewingMeasurementObjectSchema.shape.source,
     placement: DigitalViewingMeasurementPlacementSchema.optional()
   }).strict()),
   photoEvidence: z.array(z.object({
@@ -1330,10 +1347,10 @@ export const DigitalViewingDeliveryPackageManifestObjectSchema = z.object({
       measurementId: IdSchema,
       label: z.string().min(1).max(160),
       value: z.number().finite(),
-      tolerance: DigitalViewingMeasurementSchema.shape.tolerance,
-      unit: DigitalViewingMeasurementSchema.shape.unit,
+      tolerance: DigitalViewingMeasurementObjectSchema.shape.tolerance,
+      unit: DigitalViewingMeasurementObjectSchema.shape.unit,
       confidence: ConfidenceSchema,
-      source: DigitalViewingMeasurementSchema.shape.source,
+      source: DigitalViewingMeasurementObjectSchema.shape.source,
       hostElementId: IdSchema.optional(),
       axis: DigitalViewingMeasurementPlacementSchema.shape.axis.optional(),
       referenceFrame: DigitalViewingMeasurementPlacementSchema.shape.referenceFrame.optional(),
@@ -1349,8 +1366,8 @@ export const DigitalViewingDeliveryPackageManifestObjectSchema = z.object({
       measurementId: IdSchema,
       label: z.string().min(1).max(160),
       value: z.number().finite(),
-      tolerance: DigitalViewingMeasurementSchema.shape.tolerance,
-      unit: DigitalViewingMeasurementSchema.shape.unit,
+      tolerance: DigitalViewingMeasurementObjectSchema.shape.tolerance,
+      unit: DigitalViewingMeasurementObjectSchema.shape.unit,
       hostElementId: IdSchema.optional(),
       axis: DigitalViewingMeasurementPlacementSchema.shape.axis.optional(),
       referenceFrame: DigitalViewingMeasurementPlacementSchema.shape.referenceFrame.optional(),
@@ -1361,14 +1378,14 @@ export const DigitalViewingDeliveryPackageManifestObjectSchema = z.object({
       annotation: z.object({
         text: z.string().min(1).max(200),
         value: z.number().finite(),
-        tolerance: DigitalViewingMeasurementSchema.shape.tolerance,
-        unit: DigitalViewingMeasurementSchema.shape.unit,
+        tolerance: DigitalViewingMeasurementObjectSchema.shape.tolerance,
+        unit: DigitalViewingMeasurementObjectSchema.shape.unit,
         axis: DigitalViewingMeasurementPlacementSchema.shape.axis,
         hostElementId: IdSchema,
         referenceFrame: DigitalViewingMeasurementPlacementSchema.shape.referenceFrame,
         from: z.string().min(1).max(120),
         to: z.string().min(1).max(120),
-        source: DigitalViewingMeasurementSchema.shape.source,
+        source: DigitalViewingMeasurementObjectSchema.shape.source,
         confidence: ConfidenceSchema
       }).strict().optional()
     }).strict())

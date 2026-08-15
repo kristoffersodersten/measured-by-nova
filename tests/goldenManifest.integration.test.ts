@@ -470,7 +470,7 @@ describe("golden manifest integration", () => {
             kind: "cube",
             name: "body",
             location: [0, 0, 0.8],
-            scale: [2.4, 0.9, 0.45],
+            scale: [2.41, 0.945, 0.725],
             rotation: [0, 0, 0],
             color: "#ffffff"
           },
@@ -494,7 +494,7 @@ describe("golden manifest integration", () => {
             kind: "cube",
             name: "wheel-axles",
             location: [0, 0, 0.32],
-            scale: [1.65, 0.06, 0.06],
+            scale: [1.435, 0.06, 0.06],
             rotation: [0, 0, 0],
             color: "#151515"
           },
@@ -706,6 +706,12 @@ describe("golden manifest integration", () => {
           value: measurement.value,
           unit: measurement.unit,
           tolerance: measurement.tolerance,
+          axis: measurement.placement?.axis,
+          geometryValidation: "axis-extent",
+          referenceFrameReadback: measurement.placement?.referenceFrame ?? "asset-local",
+          actualValue: measurement.value,
+          difference: 0,
+          withinTolerance: true,
           sourceOfTruth: "declared-measurement-value-used-by-blender"
         }))
     );
@@ -895,6 +901,109 @@ describe("golden manifest integration", () => {
     expect((await stat(path.join(outputDir, "renders/vehicle-front.png"))).isFile()).toBe(true);
     expect((await stat(path.join(outputDir, "renders/vehicle-front.manifest.json"))).isFile()).toBe(true);
     expect((await stat(path.join(outputDir, "renders/vehicle-front-render.blend"))).isFile()).toBe(true);
+
+    const validRenderHash = createHash("sha256").update(renderFile).digest("hex");
+    const mismatchedSource = await runBlenderJob(
+      { outputDir, timeoutMs: 120_000 },
+      {
+        mode: "model",
+        name: "vehicle-measurement-mismatch",
+        primitives: capture.modelElements.map((element) => ({
+          kind: "cube" as const,
+          name: element.id,
+          location: [0, 0, 0] as [number, number, number],
+          scale: element.id === "body"
+            ? [2, 0.945, 0.725] as [number, number, number]
+            : element.id === "wheel-axles"
+              ? [1.435, 0.06, 0.06] as [number, number, number]
+              : [0.1, 0.1, 0.1] as [number, number, number],
+          rotation: [0, 0, 0] as [number, number, number],
+          color: "#ffffff"
+        })),
+        camera: { location: [4, -5, 3], target: [0, 0, 0.5] }
+      },
+      sourceBlendPath
+    );
+    expect(mismatchedSource.ok, mismatchedSource.stderr).toBe(true);
+    const mismatchResult = await runBlenderJob(
+      { outputDir, timeoutMs: 120_000 },
+      job,
+      "renders/vehicle-measurement-mismatch.blend"
+    );
+    expect(mismatchResult.ok).toBe(false);
+    expect(mismatchResult.stderr).toContain("Locked Blender geometry does not match verified measurement: overall-length");
+    expect(createHash("sha256").update(await readFile(path.join(outputDir, "renders/vehicle-front.png"))).digest("hex")).toBe(validRenderHash);
+  }, 180_000);
+
+  it.each([
+    ["boat", "fixtures/digital-viewing-boat-capture.json", [4.21, 1.34, 0.8]],
+    ["property", "fixtures/digital-viewing-property-capture.json", [5.9, 4.2, 2.325]]
+  ] as const)("renders a measurement-validated %s delivery vertical", async (assetType, fixturePath, primaryScale) => {
+    const outputDir = await mkdtemp(path.join(os.tmpdir(), `nova-measured-${assetType}-`));
+    const capture = DigitalViewingCaptureSchema.parse(JSON.parse(await readFile(fixturePath, "utf8")) as unknown);
+    const primaryHost = capture.measurements[0]?.placement?.hostElementId;
+    expect(primaryHost).toBeTruthy();
+    const sourceBlendPath = `sources/${assetType}-locked.blend`;
+    const sourceResult = await runBlenderJob(
+      { outputDir, timeoutMs: 120_000 },
+      {
+        mode: "model",
+        name: `${assetType}-measured-source`,
+        primitives: capture.modelElements.map((element) => ({
+          kind: "cube" as const,
+          name: element.id,
+          location: [0, 0, 0] as [number, number, number],
+          scale: element.id === primaryHost ? [...primaryScale] : [0.1, 0.1, 0.1],
+          rotation: [0, 0, 0] as [number, number, number],
+          color: "#ffffff"
+        })),
+        camera: { location: [8, -10, 7], target: [0, 0, 0] }
+      },
+      sourceBlendPath
+    );
+    expect(sourceResult.ok, sourceResult.stderr).toBe(true);
+
+    for (const photo of capture.photos) {
+      const resolved = path.join(outputDir, photo.path);
+      await mkdir(path.dirname(resolved), { recursive: true });
+      await writeFile(resolved, pngWithDeclaredDimensions(photo.pixelWidth ?? 1, photo.pixelHeight ?? 1));
+    }
+    for (const texture of capture.materials.flatMap((entry) => entry.textureMaps)) {
+      const resolved = path.join(outputDir, texture.path);
+      await mkdir(path.dirname(resolved), { recursive: true });
+      await writeFile(resolved, pngWithDeclaredDimensions(texture.pixelWidth ?? 1, texture.pixelHeight ?? 1));
+    }
+    const assetPaths = [
+      ...capture.photos.map((photo) => photo.path),
+      ...capture.materials.flatMap((entry) => entry.textureMaps.map((texture) => texture.path))
+    ];
+    const renderPreset = {
+      presetId: `${assetType}-runtime-proof`, renderer: "eevee" as const,
+      resolution: { width: 128, height: 96 },
+      camera: { mode: "perspective" as const, sector: capture.photos.find((photo) => photo.verified)?.sector ?? "front", focalLengthMm: 55 },
+      lighting: { environment: "studio" as const, colorTemperatureK: 5600, intensity: 0.5 },
+      outputPath: `renders/${assetType}.png`
+    };
+    const renderManifest = buildDigitalViewingRenderManifest(capture, renderPreset);
+    const assetBundleManifest = buildDigitalViewingAssetBundleManifest(capture, renderManifest, {
+      existingFiles: assetPaths,
+      assetFiles: await assetFilesFor(outputDir, assetPaths)
+    });
+    const result = await runBlenderJob(
+      { outputDir, timeoutMs: 120_000 },
+      buildDigitalViewingBlenderRenderJob(capture, renderPreset, sourceBlendPath, DefaultCapabilityManifest, assetBundleManifest),
+      `renders/${assetType}.blend`
+    );
+    expect(result.ok, result.stderr).toBe(true);
+    const manifest = JSON.parse(await readFile(path.join(outputDir, `renders/${assetType}.manifest.json`), "utf8")) as {
+      blenderExecution: { measurementApplication: { applied: Array<{ geometryValidation?: string; withinTolerance?: boolean }> } };
+    };
+    expect(manifest.blenderExecution.measurementApplication.applied).toHaveLength(capture.measurements.length);
+    const validatedMeasurements = capture.measurements.filter((measurement) => measurement.placement?.geometryValidation === "axis-extent");
+    expect(manifest.blenderExecution.measurementApplication.applied.filter((entry) => entry.geometryValidation === "axis-extent")).toHaveLength(validatedMeasurements.length);
+    expect(manifest.blenderExecution.measurementApplication.applied.filter((entry) => entry.geometryValidation === "axis-extent").every((entry) => entry.withinTolerance)).toBe(true);
+    expect((await stat(path.join(outputDir, `renders/${assetType}.png`))).isFile()).toBe(true);
+    expect((await stat(path.join(outputDir, `renders/${assetType}.blend`))).isFile()).toBe(true);
   }, 180_000);
 
   it("refuses digital viewing render when the locked Blender source lacks declared renderable hosts", async () => {

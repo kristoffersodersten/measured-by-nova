@@ -964,6 +964,41 @@ def measurement_execution_report(render_manifest):
 
     applied = []
     for anchor in render_manifest.get("measurementAnchors", []):
+        if anchor.get("geometryValidation") != "axis-extent":
+            applied.append(
+                {
+                    "measurementId": anchor["measurementId"],
+                    "hostElementId": anchor["hostElementId"],
+                    "referenceFrame": anchor["referenceFrame"],
+                    "value": anchor["value"],
+                    "unit": anchor["unit"],
+                    "tolerance": anchor.get("tolerance"),
+                    "sourceOfTruth": "declared-measurement-value-used-by-blender",
+                }
+            )
+            continue
+        host = bpy.data.objects.get(anchor["hostElementId"])
+        axis = anchor.get("axis")
+        if axis not in ("x", "y", "z"):
+            raise ValueError(f"Measurement anchor requires a supported axis: {anchor['measurementId']} {axis}")
+        if anchor.get("unit") != "mm":
+            raise ValueError(f"Axis-extent measurement anchor requires unit mm: {anchor['measurementId']} {anchor.get('unit')}")
+        if host.parent is not None or any(abs(float(angle)) > 0.000001 for angle in host.rotation_euler):
+            raise ValueError(
+                "Axis-extent measurement host must be aligned to its declared reference frame: "
+                f"{anchor['measurementId']} host={anchor['hostElementId']} referenceFrame={anchor['referenceFrame']}"
+            )
+        axis_index = {"x": 0, "y": 1, "z": 2}[axis]
+        actual_mm = float(host.dimensions[axis_index]) / MM_TO_M
+        expected_mm = float(anchor["value"])
+        tolerance_mm = float(anchor.get("tolerance") or 0)
+        difference_mm = abs(actual_mm - expected_mm)
+        if difference_mm > tolerance_mm + 0.001:
+            raise ValueError(
+                "Locked Blender geometry does not match verified measurement: "
+                f"{anchor['measurementId']} host={anchor['hostElementId']} axis={axis} "
+                f"expected={expected_mm:.3f}mm actual={actual_mm:.3f}mm tolerance={tolerance_mm:.3f}mm"
+            )
         applied.append(
             {
                 "measurementId": anchor["measurementId"],
@@ -972,6 +1007,12 @@ def measurement_execution_report(render_manifest):
                 "value": anchor["value"],
                 "unit": anchor["unit"],
                 "tolerance": anchor.get("tolerance"),
+                "axis": axis,
+                "geometryValidation": "axis-extent",
+                "referenceFrameReadback": anchor["referenceFrame"],
+                "actualValue": round(actual_mm, 3),
+                "difference": round(difference_mm, 3),
+                "withinTolerance": True,
                 "sourceOfTruth": "declared-measurement-value-used-by-blender",
             }
         )
@@ -1078,8 +1119,6 @@ def render_digital_viewing(payload, output_path):
         raise FileNotFoundError(f"Locked source Blender file does not exist: {source_blend_path}")
     bpy.ops.wm.open_mainfile(filepath=str(source_blend_path))
     host_report = validate_declared_renderable_hosts(render_manifest)
-    measurement_report = measurement_execution_report(render_manifest)
-    measurement_authority = measurement_authority_report(render_manifest, measurement_report)
     material_report = apply_manifest_materials(render_manifest, payload)
     require_no_missing_application_hosts(material_report, "Materials")
     condition_report = apply_condition_overlays(render_manifest, payload)
@@ -1087,6 +1126,8 @@ def render_digital_viewing(payload, output_path):
     camera_report = configure_render_manifest_camera(render_manifest, payload)
     lighting_report = configure_manifest_lighting(render_manifest, payload)
     render_quality_report = configure_photoreal_render_settings(render_manifest)
+    measurement_report = measurement_execution_report(render_manifest)
+    measurement_authority = measurement_authority_report(render_manifest, measurement_report)
     render_path = resolve_under_output_root(payload, render_manifest["artifacts"]["render"])
     manifest_path = resolve_under_output_root(payload, render_manifest["artifacts"]["manifest"])
     render_path.parent.mkdir(parents=True, exist_ok=True)

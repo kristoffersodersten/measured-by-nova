@@ -389,6 +389,13 @@ execution must also report measurement anchors for every verified geometry
 measurement, keeping customer-facing dimensions traceable through the render
 manifest instead of relying only on pre-render capture data.
 
+For captures that declare `geometryValidation: axis-extent`, traceability is
+not a declaration-only claim: Blender reads the locked host extent on the
+declared axis and compares it with the verified value and tolerance. Rendering
+fails before artifact mutation when the readback is outside tolerance. The
+method accepts only millimetre x/y/z measurements and rejects parented or
+rotated hosts whose axes are not aligned with the declared reference frame.
+
 Callers may pass a `customerSurface` such as `sales-listing`, `showroom`, or
 `broker-preview`; if no explicit `deliveryTargets` list is supplied, the package
 derives required customer-facing outputs from that surface. Additional targets
