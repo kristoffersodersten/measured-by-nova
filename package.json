@@ -28,7 +28,8 @@
   ],
   "bin": {
     "nova-measured": "dist/src/server.js",
-    "codex-blender-mcp": "dist/src/server.js"
+    "codex-blender-mcp": "dist/src/server.js",
+    "nova-measured-ui": "dist/src/uiServer.js"
   },
   "files": [
     "dist/src",
@@ -61,7 +62,8 @@
     "lint": "eslint . --ext .ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage --exclude tests/goldenManifest.integration.test.ts",
-    "start": "node dist/src/server.js"
+    "start": "node dist/src/server.js",
+    "ui:start": "node dist/src/uiServer.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

@@ -190,3 +190,28 @@ Validation:
 ```bash
 pnpm exec vitest run tests/uiSurfaceContract.test.ts
 ```
+
+## Executable loopback workspace
+
+`pnpm ui:start` launches the governed surface on `127.0.0.1:4173`. It renders
+the three contract panels, visible Environment Truth, output-authority warning,
+and an explicit manual hold action. It has no external assets or telemetry,
+sets a deny-by-default content security policy, limits mutation bodies, checks
+browser origin, and exposes machine-readable state at `/api/workspace`.
+
+Startup is intentionally an honest empty state: no capture package is selected,
+validation has not started, and model lock remains causally blocked. Runtime
+identity alone never implies that project evidence was loaded or verified.
+Configured engine identity is visible but remains pending until a separate
+runtime proof is bound. All accepted Environment Truth fields, including data
+scope and any fallback cause/primary failure, remain visible. An active hold is
+rendered again after navigation and clears only on controlled process restart.
+Invalid runtime configuration and occupied-port startup failures terminate with
+explicit machine-readable errors; no alternate bind address or port is chosen.
+
+Runtime identity is explicit through `MEASURED_UI_PROVIDER`,
+`MEASURED_UI_ENGINE`, `MEASURED_UI_ENDPOINT`, `MEASURED_UI_GEOGRAPHY`,
+`MEASURED_UI_OWNER`, `MEASURED_UI_COST`, `MEASURED_UI_LATENCY`, and
+`MEASURED_UI_PRIVACY`. Invalid or unknown truth values fail process startup.
+The manual override can hold delivery only; it cannot silently approve, lock,
+or upgrade an output.
