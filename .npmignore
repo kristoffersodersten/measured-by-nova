@@ -1,0 +1,11 @@
+**/__pycache__/
+**/*.pyc
+dist/tests/
+dist/scripts/
+dist/vitest.config.js
+docs/compute-distribution.md
+docs/novaforge-ax102-stack.md
+docs/operator-tooling.md
+docs/performance-evidence.md
+docs/remote-workspace.md
+docs/termux-hetzner-mcp-locations.json

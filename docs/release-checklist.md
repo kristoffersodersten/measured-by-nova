@@ -43,6 +43,17 @@ Required result:
 - TypeScript build succeeds
 - `blender/bridge.py` is copied into `dist/blender`
 
+The protected CI runtime also runs `pnpm release:verify`. It packs twice and
+requires identical SHA-256 hashes, rejects forbidden build/governance content,
+installs the tarball into a fresh temporary project, performs an MCP initialize
+and tools/list handshake, discovers the declared Blender executable, proves a
+corrupted payload changes the integrity hash, removes the temporary install,
+and writes exact-commit evidence plus the verified tarball under `release/`.
+
+The release artifact must contain product runtime only. Compiled tests,
+benchmark scripts, Python bytecode, Vitest configuration, and internal
+compute/operator governance documents are forbidden.
+
 ## GitHub Rename
 
 When ready to rename the repository:
