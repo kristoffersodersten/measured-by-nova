@@ -910,7 +910,9 @@ async function validatePortableExportArtifact(outputDir: string, artifact: Porta
   const artifactPath = safeOutputPath(outputDir, artifact.path);
   const contents = await readFile(artifactPath);
   if (contents.byteLength === 0) throw new Error(`Portable ${artifact.format} artifact is empty: ${artifact.path}`);
-  if (artifact.format === "blend" && contents.subarray(0, 7).toString("ascii") !== "BLENDER") {
+  const blendHeaderValid = contents.subarray(0, 7).toString("ascii") === "BLENDER"
+    || contents.subarray(0, 4).equals(Buffer.from([0x28, 0xb5, 0x2f, 0xfd]));
+  if (artifact.format === "blend" && !blendHeaderValid) {
     throw new Error(`Portable blend artifact has an invalid Blender header: ${artifact.path}`);
   }
   if (artifact.format === "glb" && contents.subarray(0, 4).toString("ascii") !== "glTF") {
