@@ -335,7 +335,10 @@ def add_measurement_cameras(project):
 
 
 def export_project(payload, output_path):
-    create_measurement_project(payload)
+    source_path = resolve_under_output_root(payload, payload["sourceBlendPath"])
+    if not source_path.is_file():
+        raise FileNotFoundError(f"Locked export source missing: {payload['sourceBlendPath']}")
+    bpy.ops.wm.open_mainfile(filepath=str(source_path))
     project_id = payload["project"]["projectId"]
     base = output_path.parent
     base.mkdir(parents=True, exist_ok=True)

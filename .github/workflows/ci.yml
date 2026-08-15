@@ -54,7 +54,7 @@ jobs:
       - name: Install declared Blender runtime
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends blender libegl1
+          sudo apt-get install --yes --no-install-recommends blender libegl1 python3-numpy
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - name: Run Blender end-to-end and negative paths
@@ -62,7 +62,7 @@ jobs:
           BLENDER_PATH: /usr/bin/blender
         run: |
           started_at=$(date +%s%3N)
-          pnpm vitest run tests/goldenManifest.integration.test.ts tests/sourceProjection.integration.test.ts
+          pnpm vitest run tests/goldenManifest.integration.test.ts tests/sourceProjection.integration.test.ts tests/portableExport.integration.test.ts
           completed_at=$(date +%s%3N)
           blender_runtime_ms=$((completed_at - started_at))
           MEASURED_BLENDER_RUNTIME_MS="$blender_runtime_ms" pnpm benchmark:xray
