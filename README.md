@@ -76,7 +76,9 @@ See [MVP product contract](docs/mvp.md).
 - Validate digital viewing capture packages for vehicles, boats, properties, exterior structures, and products. Custom captures are extension contracts and fail closed until a project-specific preset is supplied.
 - Generate deterministic 1:1 Blender models from typed parametric profiles and measured constraints.
 - Align geometry with structured photographic evidence without letting photos override exact measurements.
-- Support photogrammetry-assisted texture projection and PBR material workflows as the pipeline matures.
+- Use deterministic explicit-anchor planar alignment and source-backed Blender
+  projection today; future local photogrammetry may propose anchors but cannot
+  bypass provenance, uncertainty, geometry-authority, or review gates.
 - Export `.blend`, `.glb`, `.obj`, orthographic elevation views, permit-support PDFs, and future real-time engine targets.
 - Keep legacy 2D sketch and primitive 3D tools for low-level utility work.
 - Run explicit Blender Python only as an unsafe opt-in fallback.
@@ -277,6 +279,7 @@ pnpm start
 - [Spatial reconstruction pipeline](docs/spatial-reconstruction.md)
 - [Digital viewing pipeline](docs/digital-viewing-pipeline.md)
 - [Namaka alignment contract](docs/namaka-alignment.md)
+- [Local source projection contract](docs/source-projection.md)
 - [UI/UX contract](docs/ui-ux-contract.md)
 - [MVP product contract](docs/mvp.md)
 - [Productization plan](docs/productization.md)

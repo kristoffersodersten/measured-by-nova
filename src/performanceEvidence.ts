@@ -4,6 +4,7 @@ export const PerformanceBudgetSchema = z.object({
   captureValidationP95Ms: z.number().positive(),
   renderManifestP95Ms: z.number().positive(),
   packageManifestP95Ms: z.number().positive(),
+  sourceProjectionAlignmentP95Ms: z.number().positive(),
   maxRssDeltaBytes: z.number().int().positive(),
   maxPackageBytes: z.number().int().positive(),
   blenderRuntimeMaxMs: z.number().int().positive()
@@ -13,6 +14,7 @@ export const DefaultPerformanceBudget = PerformanceBudgetSchema.parse({
   captureValidationP95Ms: 25,
   renderManifestP95Ms: 50,
   packageManifestP95Ms: 100,
+  sourceProjectionAlignmentP95Ms: 25,
   maxRssDeltaBytes: 64 * 1024 * 1024,
   maxPackageBytes: 2 * 1024 * 1024,
   blenderRuntimeMaxMs: 7 * 60 * 1000
@@ -27,6 +29,7 @@ export const PerformanceObservationSchema = z.object({
   captureValidation: MetricSchema,
   renderManifest: MetricSchema,
   packageManifest: MetricSchema,
+  sourceProjectionAlignment: MetricSchema,
   rssDeltaBytes: z.number().int().nonnegative(),
   packageBytes: z.number().int().nonnegative(),
   blenderRuntimeMs: z.number().int().nonnegative()
@@ -36,6 +39,7 @@ const PerformanceMetricSchema = z.enum([
   "captureValidationP95Ms",
   "renderManifestP95Ms",
   "packageManifestP95Ms",
+  "sourceProjectionAlignmentP95Ms",
   "rssDeltaBytes",
   "packageBytes",
   "blenderRuntimeMs"
@@ -73,6 +77,7 @@ export function evaluatePerformanceEvidence(
   check("captureValidationP95Ms", parsedObservation.captureValidation.p95Ms, parsedBudget.captureValidationP95Ms);
   check("renderManifestP95Ms", parsedObservation.renderManifest.p95Ms, parsedBudget.renderManifestP95Ms);
   check("packageManifestP95Ms", parsedObservation.packageManifest.p95Ms, parsedBudget.packageManifestP95Ms);
+  check("sourceProjectionAlignmentP95Ms", parsedObservation.sourceProjectionAlignment.p95Ms, parsedBudget.sourceProjectionAlignmentP95Ms);
   check("rssDeltaBytes", parsedObservation.rssDeltaBytes, parsedBudget.maxRssDeltaBytes);
   check("packageBytes", parsedObservation.packageBytes, parsedBudget.maxPackageBytes);
   check("blenderRuntimeMs", parsedObservation.blenderRuntimeMs, parsedBudget.blenderRuntimeMaxMs);

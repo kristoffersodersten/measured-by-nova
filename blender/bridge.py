@@ -4,6 +4,7 @@ import json
 import math
 import struct
 import sys
+import traceback
 import zlib
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from mathutils import Vector
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from digital_viewing import render_digital_viewing
+from source_projection import apply_source_projection
 
 MM_TO_M = 0.001
 
@@ -1650,6 +1652,8 @@ def main():
             export_template(payload)
         elif operation == "digital_viewing_render":
             render_digital_viewing(payload, output_path)
+        elif operation == "source_projection":
+            apply_source_projection(payload)
         else:
             create_measurement_project(payload)
     else:
@@ -1660,4 +1664,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        traceback.print_exc()
+        sys.exit(1)

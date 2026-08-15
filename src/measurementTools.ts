@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { z } from "zod";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { BlenderConfig, BlenderToolResult } from "./contracts.js";
 import { runBlenderJob, safeOutputPath } from "./blenderRunner.js";
@@ -46,6 +46,7 @@ import { evaluateFacadeQaManifest } from "./facadeQa.js";
 import { buildModelLock, hashSourceProject, validateModelLock } from "./modelLock.js";
 import { buildOrthographicViewRegistry, validateRequiredViews } from "./viewRegistry.js";
 import { appendRequestLog, fail, ok, readProject, requestId, writeProject } from "./projectStore.js";
+import { buildSourceProjectionBlenderJob, buildSourceProjectionManifest, SourceProjectionError, SourceProjectionExecutionReportSchema, SourceProjectionInputSchema } from "./sourceProjection.js";
 import {
   CarportProfileParametersSchema,
   CreateMeasurementProjectSchema,
@@ -523,6 +524,88 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     ]);
   });
 
+  register(server, "align_and_project_source_photo", "Align an exact source photo to a measured planar host using explicit anchors, then apply it to a geometry-preserving Blender copy.", SourceProjectionInputSchema, async (input) => {
+    const req = requestId();
+    let alignment;
+    try {
+      alignment = buildSourceProjectionManifest(input);
+    } catch (error) {
+      if (error instanceof SourceProjectionError) return fail(req, error.code, error.message);
+      throw error;
+    }
+    const sourcePhotoPath = safeOutputPath(config.outputDir, input.sourcePhoto.path);
+    const sourceBlendPath = safeOutputPath(config.outputDir, input.sourceBlendPath);
+    const outputBlendPath = safeOutputPath(config.outputDir, input.outputBlendPath);
+    const outputReportPath = safeOutputPath(config.outputDir, input.outputReportPath);
+    if (!(await pathExists(sourcePhotoPath))) return fail(req, "source_projection_photo_missing", `Source photo is missing: ${input.sourcePhoto.path}`);
+    if (!(await pathExists(sourceBlendPath))) return fail(req, "source_projection_blend_missing", `Locked source is missing: ${input.sourceBlendPath}`);
+    try {
+      await Promise.all([
+        assertExistingPathWithinRoot(config.outputDir, sourcePhotoPath),
+        assertExistingPathWithinRoot(config.outputDir, sourceBlendPath),
+        assertOutputParentWithinRoot(config.outputDir, outputBlendPath),
+        assertOutputParentWithinRoot(config.outputDir, outputReportPath)
+      ]);
+    } catch {
+      return fail(req, "source_projection_path_escape", "Projection input or output resolves outside the configured output root.");
+    }
+    let project;
+    try {
+      project = materializeProfiles(await readProject(config, input.projectId));
+    } catch (error) {
+      return fail(req, "source_projection_model_lock_invalid", error instanceof Error ? error.message : String(error));
+    }
+    if (project.modelLock.modelArtifact !== input.sourceBlendPath) {
+      return fail(req, "source_projection_model_lock_invalid", "Projection source must be the exact Blender artifact declared by the project model lock.");
+    }
+    const lockValidation = await validateModelLock(config, project);
+    if (!lockValidation.ok) {
+      return fail(req, "source_projection_model_lock_invalid", "Projection source no longer matches the reviewed model lock.", lockValidation.blocking.map((reason) => `${reason.code}: ${reason.message}`));
+    }
+    const sourcePhoto = await readFile(sourcePhotoPath);
+    const sourcePhotoStat = await stat(sourcePhotoPath);
+    const sourceBlendStat = await stat(sourceBlendPath);
+    if (!sourcePhotoStat.isFile()) return fail(req, "source_projection_photo_missing", `Source photo is not a file: ${input.sourcePhoto.path}`);
+    if (!sourceBlendStat.isFile()) return fail(req, "source_projection_blend_missing", `Locked source is not a file: ${input.sourceBlendPath}`);
+    const actualIdentity = { sizeBytes: sourcePhotoStat.size, sha256: createHash("sha256").update(sourcePhoto).digest("hex") };
+    if (actualIdentity.sizeBytes !== input.sourcePhoto.sizeBytes || actualIdentity.sha256 !== input.sourcePhoto.sha256) {
+      return fail(req, "source_projection_photo_identity_mismatch", `Source photo no longer matches declared size and SHA-256: ${input.sourcePhoto.path}`);
+    }
+    const dimensions = imageDimensions(sourcePhoto);
+    if (!dimensions || dimensions.width !== input.sourcePhoto.pixelWidth || dimensions.height !== input.sourcePhoto.pixelHeight) {
+      return fail(req, "source_projection_photo_dimensions_mismatch", `Source photo dimensions do not match the declared pixel dimensions: ${input.sourcePhoto.path}`);
+    }
+    if (await pathExists(outputBlendPath) || await pathExists(outputReportPath)) {
+      return fail(req, "source_projection_output_exists", "Projection refuses to overwrite an existing blend or execution report.");
+    }
+    const job = buildSourceProjectionBlenderJob(input, alignment);
+    const result = await runBlenderJob(config, job, input.outputBlendPath);
+    if (!result.ok) {
+      await Promise.all([rm(outputBlendPath, { force: true }), rm(outputReportPath, { force: true })]);
+      return fail(req, "source_projection_execution_failed", "Blender could not apply the source-backed projection; partial outputs were removed.", [result.stderr]);
+    }
+    let report;
+    try {
+      report = SourceProjectionExecutionReportSchema.parse(JSON.parse(await readFile(outputReportPath, "utf8")));
+      if (
+        report.alignmentManifestHash !== alignment.manifestHash
+        || report.sourcePhotoIdentity.path !== input.sourcePhoto.path
+        || report.sourcePhotoIdentity.sizeBytes !== input.sourcePhoto.sizeBytes
+        || report.sourcePhotoIdentity.sha256 !== input.sourcePhoto.sha256
+        || report.sourceBlendPath !== input.sourceBlendPath
+        || report.hostElementId !== input.target.hostElementId
+        || report.face !== input.target.face
+      ) {
+        throw new Error("Projection execution report does not match the alignment or source photo identity.");
+      }
+    } catch (error) {
+      await Promise.all([rm(outputBlendPath, { force: true }), rm(outputReportPath, { force: true })]);
+      return fail(req, "source_projection_report_invalid", error instanceof Error ? error.message : String(error), ["Projection outputs were removed during recovery."]);
+    }
+    await appendRequestLog(config, input.projectId, req, "align_and_project_source_photo", { alignmentManifestHash: alignment.manifestHash, sourceBlendPath: input.sourceBlendPath, outputBlendPath: input.outputBlendPath, outputReportPath: input.outputReportPath });
+    return ok(req, { alignment, blender: result, report, artifacts: { blend: input.outputBlendPath, report: input.outputReportPath } }, ["Projection is visual evidence only and did not mutate locked geometry."]);
+  });
+
   register(server, "generate_digital_viewing_material_authoring_plan", "Generate deterministic per-material PBR authoring requirements before Blender rendering without changing geometry.", GenerateDigitalViewingMaterialAuthoringPlanInputSchema, async (input) => {
     const req = requestId();
     const payload = GenerateDigitalViewingMaterialAuthoringPlanInputSchema.parse(input);
@@ -774,6 +857,32 @@ function imageDimensions(contents: Buffer): { width: number; height: number } | 
     }
   }
   return undefined;
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await stat(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function assertExistingPathWithinRoot(root: string, filePath: string): Promise<void> {
+  const [realRoot, realFile] = await Promise.all([realpath(root), realpath(filePath)]);
+  if (realFile !== realRoot && !realFile.startsWith(`${realRoot}${path.sep}`)) throw new Error("path_escape");
+}
+
+async function assertOutputParentWithinRoot(root: string, filePath: string): Promise<void> {
+  const realRoot = await realpath(root);
+  let ancestor = path.dirname(filePath);
+  while (!(await pathExists(ancestor))) {
+    const parent = path.dirname(ancestor);
+    if (parent === ancestor) throw new Error("path_escape");
+    ancestor = parent;
+  }
+  const realAncestor = await realpath(ancestor);
+  if (realAncestor !== realRoot && !realAncestor.startsWith(`${realRoot}${path.sep}`)) throw new Error("path_escape");
 }
 
 function exportTemplateWarnings(template: string): string[] {

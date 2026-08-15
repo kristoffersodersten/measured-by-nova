@@ -103,6 +103,7 @@ Every new project carries this source-of-truth policy:
 | `import_reference_photos` | Stores photos as low-confidence references or validation inputs. |
 | `define_known_dimension` | Adds an authoritative or measured dimension constraint. |
 | `define_reference_plane` | Adds a measured or inferred alignment plane. |
+| `align_and_project_source_photo` | Computes a deterministic anchor-backed planar homography and applies the exact photo to a geometry-preserving Blender copy. |
 | `define_opening` | Adds a door, window, or open bay constraint. |
 | `define_step_run` | Adds stair runs using known rise, going, and count. |
 | `define_assumption` | Records explicit assumptions with confidence and geometry impact. |
