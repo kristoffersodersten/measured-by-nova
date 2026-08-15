@@ -1,0 +1,70 @@
+name: Measured product gates
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: measured-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22.19.0
+      - run: corepack enable && corepack prepare pnpm@10.33.0 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level high
+      - run: pnpm lint
+      - run: pnpm build
+      - run: pnpm vitest run --exclude tests/goldenManifest.integration.test.ts
+
+  blender-runtime:
+    name: blender-runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22.19.0
+      - run: corepack enable && corepack prepare pnpm@10.33.0 --activate
+      - name: Install declared Blender runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends blender libegl1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Run Blender end-to-end and negative paths
+        env:
+          BLENDER_PATH: /usr/bin/blender
+        run: pnpm vitest run tests/goldenManifest.integration.test.ts
+      - name: Record exact execution identity
+        if: always()
+        run: |
+          mkdir -p evidence
+          node -e 'const fs=require("node:fs"); fs.writeFileSync("evidence/ci-runtime.json", JSON.stringify({schemaVersion:1, commit:process.env.GITHUB_SHA, runId:process.env.GITHUB_RUN_ID, runAttempt:process.env.GITHUB_RUN_ATTEMPT, runnerImage:process.env.ImageOS, node:process.version, pnpm:"10.33.0", blenderSource:"ubuntu-24.04-apt"}, null, 2)+"\n")'
+          if command -v blender >/dev/null 2>&1; then blender --version > evidence/blender-version.txt; else echo "unavailable" > evidence/blender-version.txt; fi
+          apt-cache policy blender > evidence/blender-package-policy.txt
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        if: always()
+        with:
+          name: measured-runtime-evidence-${{ github.sha }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 30
