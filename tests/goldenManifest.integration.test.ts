@@ -937,6 +937,7 @@ describe("golden manifest integration", () => {
 
   it.each([
     ["boat", "fixtures/digital-viewing-boat-capture.json", [4.21, 1.34, 0.8]],
+    ["product", "fixtures/digital-viewing-product-capture.json", [0.6, 0.3, 0.9]],
     ["property", "fixtures/digital-viewing-property-capture.json", [5.9, 4.2, 2.325]]
   ] as const)("renders a measurement-validated %s delivery vertical", async (assetType, fixturePath, primaryScale) => {
     const outputDir = await mkdtemp(path.join(os.tmpdir(), `nova-measured-${assetType}-`));

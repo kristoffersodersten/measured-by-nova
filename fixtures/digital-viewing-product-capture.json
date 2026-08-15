@@ -1,0 +1,637 @@
+{
+  "schemaVersion": 1,
+  "captureId": "product-demo-capture",
+  "projectId": "product-demo",
+  "assetType": "product",
+  "unit": "mm",
+  "requiredSectors": [
+    "front",
+    "back",
+    "left",
+    "right",
+    "top",
+    "detail"
+  ],
+  "modelElements": [
+    {
+      "id": "enclosure",
+      "kind": "body",
+      "renderable": true,
+      "confidence": "high",
+      "source": "measured_geometry"
+    },
+    {
+      "id": "control-panel",
+      "kind": "panel",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    },
+    {
+      "id": "display-glass",
+      "kind": "surface",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    },
+    {
+      "id": "metal-frame",
+      "kind": "foundation",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    },
+    {
+      "id": "connectors",
+      "kind": "surface",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    },
+    {
+      "id": "internal-components",
+      "kind": "surface",
+      "renderable": true,
+      "confidence": "medium",
+      "source": "locked_blender"
+    }
+  ],
+  "measurements": [
+    {
+      "id": "overall-length",
+      "label": "Overall length",
+      "value": 1200,
+      "unit": "mm",
+      "confidence": "high",
+      "verified": true,
+      "source": "manual_measurement",
+      "placement": {
+        "hostElementId": "enclosure",
+        "axis": "x",
+        "from": "left exterior extent",
+        "to": "right exterior extent",
+        "referenceFrame": "asset-local",
+        "geometryValidation": "axis-extent"
+      },
+      "affectsGeometry": true,
+      "tolerance": 5
+    },
+    {
+      "id": "overall-width",
+      "label": "Overall width",
+      "value": 600,
+      "unit": "mm",
+      "confidence": "high",
+      "verified": true,
+      "source": "manual_measurement",
+      "placement": {
+        "hostElementId": "enclosure",
+        "axis": "y",
+        "from": "front exterior extent",
+        "to": "rear exterior extent",
+        "referenceFrame": "asset-local",
+        "geometryValidation": "axis-extent"
+      },
+      "affectsGeometry": true,
+      "tolerance": 5
+    },
+    {
+      "id": "overall-height",
+      "label": "Overall height",
+      "value": 1800,
+      "unit": "mm",
+      "confidence": "high",
+      "verified": true,
+      "source": "manual_measurement",
+      "placement": {
+        "hostElementId": "enclosure",
+        "axis": "z",
+        "from": "lowest product extent",
+        "to": "highest product extent",
+        "referenceFrame": "asset-local",
+        "geometryValidation": "axis-extent"
+      },
+      "affectsGeometry": true,
+      "tolerance": 5
+    }
+  ],
+  "photos": [
+    {
+      "path": "photos/product-north.jpg",
+      "sector": "front",
+      "role": "geometry_alignment",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": 0,
+        "pitchDeg": 0,
+        "focalLength35mmEquivalent": 45,
+        "cameraDistanceMm": 12000,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/product-south.jpg",
+      "sector": "back",
+      "role": "geometry_alignment",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": 180,
+        "pitchDeg": 0,
+        "focalLength35mmEquivalent": 45,
+        "cameraDistanceMm": 12000,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/product-east.jpg",
+      "sector": "right",
+      "role": "material",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": 90,
+        "pitchDeg": 0,
+        "focalLength35mmEquivalent": 45,
+        "cameraDistanceMm": 12000,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/product-west.jpg",
+      "sector": "left",
+      "role": "material",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": -90,
+        "pitchDeg": 0,
+        "focalLength35mmEquivalent": 45,
+        "cameraDistanceMm": 12000,
+        "pitchGuidance": "level",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "daylight",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/product-interior.jpg",
+      "sector": "top",
+      "role": "material",
+      "verified": true,
+      "anchorsVisible": true,
+      "captureMetadata": {
+        "angleType": "orthogonal",
+        "cameraMode": "orthographic-reference",
+        "yawDeg": 0,
+        "pitchDeg": -90,
+        "focalLength35mmEquivalent": 45,
+        "cameraDistanceMm": 3000,
+        "pitchGuidance": "surface-normal",
+        "lensGuidance": "normal-35-70mm-equivalent",
+        "coverage": "full-object",
+        "occluded": false,
+        "lightingReference": "mixed-measured",
+        "colorReference": "known-white-reference",
+        "whiteBalanceKelvin": 5600,
+        "exposureEv": 0
+      },
+      "pixelWidth": 4096,
+      "pixelHeight": 3072
+    },
+    {
+      "path": "photos/product-detail.jpg",
+      "sector": "detail",
+      "role": "condition",
+      "verified": true,
+      "anchorsVisible": false,
+      "captureMetadata": {
+        "angleType": "detail",
+        "cameraMode": "macro-detail",
+        "pitchGuidance": "surface-normal",
+        "lensGuidance": "macro-detail",
+        "coverage": "condition-detail",
+        "occluded": false
+      },
+      "pixelWidth": 2048,
+      "pixelHeight": 2048
+    }
+  ],
+  "materials": [
+    {
+      "materialId": "enclosure-plastic",
+      "hostElementId": "control-panel",
+      "presetId": "matte-plastic",
+      "materialSurfaces": [
+        "enclosure",
+        "controls"
+      ],
+      "category": "plastic",
+      "baseColor": "#22252a",
+      "roughness": 0.48,
+      "metallic": 0,
+      "specular": 0.45,
+      "normalSource": "photo",
+      "textureScaleMm": 900,
+      "surfaceMapping": {
+        "projection": "planar",
+        "faces": [
+          "front",
+          "right"
+        ],
+        "scaleMm": 900,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/product-north.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/product-north.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "normal",
+          "path": "textures/product-enclosure-plastic-normal.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 900,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/product-north.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/product-enclosure-plastic-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 900,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/product-east.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/product-north.jpg",
+        "photos/product-east.jpg"
+      ],
+      "transmission": 0
+    },
+    {
+      "materialId": "frame-metal",
+      "hostElementId": "metal-frame",
+      "presetId": "brushed-metal",
+      "materialSurfaces": [
+        "frame",
+        "trim"
+      ],
+      "category": "metal",
+      "baseColor": "#b8bcc2",
+      "roughness": 0.3,
+      "metallic": 1,
+      "specular": 0.45,
+      "normalSource": "photo",
+      "textureScaleMm": 500,
+      "surfaceMapping": {
+        "projection": "box",
+        "faces": [
+          "front",
+          "left",
+          "right"
+        ],
+        "scaleMm": 500,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/product-south.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/product-south.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "normal",
+          "path": "textures/product-frame-metal-normal.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 500,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/product-south.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/product-frame-metal-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 500,
+          "pixelWidth": 4096,
+          "pixelHeight": 4096,
+          "sourcePhoto": "photos/product-west.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/product-south.jpg",
+        "photos/product-west.jpg"
+      ],
+      "transmission": 0
+    },
+    {
+      "materialId": "connector-metal",
+      "hostElementId": "connectors",
+      "presetId": "brushed-metal",
+      "materialSurfaces": [
+        "connectors"
+      ],
+      "category": "metal",
+      "baseColor": "#b8bcc2",
+      "roughness": 0.3,
+      "metallic": 1,
+      "specular": 0.45,
+      "normalSource": "photo",
+      "textureScaleMm": 300,
+      "surfaceMapping": {
+        "projection": "uv",
+        "faces": [
+          "top",
+          "front",
+          "left"
+        ],
+        "scaleMm": 300,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/product-west.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/product-west.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "metallic",
+          "path": "textures/product-connector-metal-metallic.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 300,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/product-west.jpg"
+        },
+        {
+          "type": "normal",
+          "path": "textures/product-connector-metal-normal.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 300,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/product-west.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/product-connector-metal-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 300,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/product-west.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/product-west.jpg"
+      ],
+      "transmission": 0
+    },
+    {
+      "materialId": "display-glass",
+      "hostElementId": "display-glass",
+      "presetId": "clear-glass",
+      "materialSurfaces": [
+        "display",
+        "lens",
+        "indicator-cover"
+      ],
+      "category": "glass",
+      "baseColor": "#dfefff",
+      "roughness": 0.08,
+      "metallic": 0,
+      "specular": 0.9,
+      "transmission": 0.7,
+      "normalSource": "none",
+      "textureScaleMm": 1000,
+      "surfaceMapping": {
+        "projection": "box",
+        "faces": [
+          "front",
+          "left",
+          "right"
+        ],
+        "scaleMm": 1000,
+        "rotationDeg": 0,
+        "sourcePhoto": "photos/product-east.jpg"
+      },
+      "appearanceCalibration": {
+        "method": "white-balance-reference",
+        "sourcePhoto": "photos/product-east.jpg",
+        "illuminant": "daylight",
+        "confidence": "medium"
+      },
+      "textureMaps": [
+        {
+          "type": "alpha",
+          "path": "textures/product-window-glass-alpha.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 1000,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/product-east.jpg"
+        },
+        {
+          "type": "roughness",
+          "path": "textures/product-window-glass-roughness.png",
+          "provenance": "photo_observed",
+          "confidence": "medium",
+          "colorSpace": "Non-Color",
+          "scaleMm": 1000,
+          "pixelWidth": 2048,
+          "pixelHeight": 2048,
+          "sourcePhoto": "photos/product-north.jpg"
+        }
+      ],
+      "provenance": "photo_observed",
+      "confidence": "medium",
+      "photoSources": [
+        "photos/product-east.jpg",
+        "photos/product-north.jpg"
+      ]
+    }
+  ],
+  "conditions": [
+    {
+      "id": "control-panel-light-fading",
+      "hostElementId": "control-panel",
+      "type": "fading",
+      "severity": "low",
+      "locationHint": "Front control-panel enclosure surface",
+      "confidence": "medium",
+      "verification": "verified",
+      "source": "photo",
+      "materialSurface": "enclosure",
+      "photoSources": [
+        "photos/product-detail.jpg"
+      ],
+      "surfacePlacement": {
+        "hostElementId": "control-panel",
+        "face": "front",
+        "u": 0.44,
+        "v": 0.55,
+        "widthMm": 900,
+        "heightMm": 260,
+        "rotationDeg": 0
+      },
+      "notes": "Light fading evidence is tracked as condition truth, not as geometry."
+    }
+  ],
+  "conditionInspections": [
+    {
+      "id": "inspection-exterior-surfaces",
+      "zone": "exterior-surfaces",
+      "hostElementId": "control-panel",
+      "materialCategory": "plastic",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/product-north.jpg",
+        "photos/product-east.jpg"
+      ],
+      "conditionIds": [],
+      "confidence": "medium",
+      "notes": "Product enclosure inspected from verified exterior photos."
+    },
+    {
+      "id": "inspection-display-glass",
+      "zone": "display-glass",
+      "hostElementId": "display-glass",
+      "materialCategory": "glass",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/product-east.jpg",
+        "photos/product-north.jpg"
+      ],
+      "conditionIds": [],
+      "confidence": "medium",
+      "notes": "Display glass inspected from verified product photos."
+    },
+    {
+      "id": "inspection-functional-elements",
+      "zone": "functional-elements",
+      "hostElementId": "metal-frame",
+      "materialCategory": "metal",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/product-south.jpg",
+        "photos/product-west.jpg"
+      ],
+      "conditionIds": [],
+      "confidence": "medium",
+      "notes": "Controls and connectors inspected from verified product photos."
+    },
+    {
+      "id": "inspection-connectors",
+      "zone": "connectors",
+      "hostElementId": "connectors",
+      "materialCategory": "metal",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/product-west.jpg"
+      ],
+      "conditionIds": [],
+      "confidence": "medium",
+      "notes": "Metal connectors inspected from verified side reference."
+    },
+    {
+      "id": "inspection-internal-components",
+      "zone": "internal-components",
+      "hostElementId": "internal-components",
+      "materialCategory": "plastic",
+      "status": "clear",
+      "verified": true,
+      "sourcePhotos": [
+        "photos/product-interior.jpg"
+      ],
+      "conditionIds": [],
+      "confidence": "medium",
+      "notes": "Internal product components inspected from verified top reference."
+    }
+  ],
+  "assumptions": [],
+  "outputTargets": [
+    "blend",
+    "glb",
+    "photoreal-render",
+    "material-condition-report"
+  ]
+}

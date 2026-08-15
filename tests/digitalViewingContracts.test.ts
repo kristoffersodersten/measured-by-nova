@@ -51,6 +51,10 @@ function loadPropertyCapture(): unknown {
   return JSON.parse(readFileSync("fixtures/digital-viewing-property-capture.json", "utf8")) as unknown;
 }
 
+function loadProductCapture(): unknown {
+  return JSON.parse(readFileSync("fixtures/digital-viewing-product-capture.json", "utf8")) as unknown;
+}
+
 const FullCarportAssetPaths = [
   "photos/carport-detail-panel.jpg",
   "photos/carport-east.jpg",
@@ -470,6 +474,9 @@ describe("digital viewing capture contract", () => {
       "exterior-structure-draft-preview",
       "exterior-structure-premium-sales",
       "exterior-structure-standard-viewing",
+      "product-draft-preview",
+      "product-premium-sales",
+      "product-standard-viewing",
       "property-draft-preview",
       "property-premium-sales",
       "property-standard-viewing",
@@ -606,6 +613,26 @@ describe("digital viewing capture contract", () => {
     expect(() => getDigitalViewingCapturePreset("custom", "premium-sales")).toThrow(
       "No digital viewing capture preset exists for custom:premium-sales."
     );
+  });
+
+  it("defines a complete premium product capture boundary", () => {
+    expect(getDigitalViewingCapturePreset("product", "premium-sales")).toMatchObject({
+      presetId: "product-premium-sales",
+      requiredSectors: ["front", "back", "left", "right", "top", "detail"],
+      requiredMeasurements: ["overall-length", "overall-width", "overall-height"],
+      requiredMaterialCategories: [],
+      requiredInspectionZones: ["exterior-surfaces", "functional-elements"],
+      conditionEvidenceRequired: false,
+      textureEvidenceRequired: true
+    });
+  });
+
+  it("accepts the product fixture against the premium product capture preset", () => {
+    const capture = DigitalViewingCaptureSchema.parse(loadProductCapture());
+    const result = evaluateDigitalViewingCapturePreset(capture, getDigitalViewingCapturePreset("product", "premium-sales"));
+    expect(result.ok).toBe(true);
+    expect(result.blocking).toEqual([]);
+    expect(evaluateDigitalViewingDeliveryReadiness(capture, "premium-sales").ok).toBe(true);
   });
 
   it("accepts the vehicle fixture against the premium vehicle capture preset", () => {
