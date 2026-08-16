@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CarportProfileParametersSchema, CreateMeasurementProjectSchema, ExportFacadeCompletionPackSchema, ExportProjectTemplateSchema, ImportReferencePhotosSchema, MeasurementProjectSchema, UnsafeRunPythonSchema } from "../src/measurementContracts.js";
+import { CarportProfileParametersSchema, CreateMeasurementProjectSchema, ExportFacadeCompletionPackSchema, ExportMeasuredModelSchema, ExportProjectTemplateSchema, ImportReferencePhotosSchema, MeasurementProjectSchema, UnsafeRunPythonSchema } from "../src/measurementContracts.js";
 
 function executionIntent(operation: "export-facade-pack" | "export-template", writeScope: Array<"project-state" | "blender-output" | "manifest">) {
   return {
@@ -104,5 +104,22 @@ describe("measurement contracts", () => {
       executionIntent: executionIntent("export-facade-pack", ["project-state", "blender-output", "manifest"]),
       views: ["north", "south", "east"]
     })).toThrow();
+  });
+
+  it("rejects duplicate portable export formats before Blender execution", () => {
+    expect(() => ExportMeasuredModelSchema.parse({
+      projectId: "carport-fixture",
+      formats: ["glb", "glb"],
+      executionIntent: {
+        intentId: "portable-format-uniqueness",
+        operation: "export-model",
+        objective: "Export the reviewed model",
+        writeScope: ["project-state", "blender-output", "manifest"],
+        forbiddenScope: ["source-measurements", "locked-geometry"],
+        selectedToolPath: "mcp:nova-measured",
+        acceptanceChecks: ["schema", "quality-gate", "manifest"],
+        executionPolicy: { locality: "local-only", telemetry: false, fallback: "none", geometryMutation: false }
+      }
+    })).toThrow("Portable export formats must be unique.");
   });
 });

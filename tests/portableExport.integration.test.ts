@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -48,6 +49,17 @@ describe("locked portable export Blender runtime", () => {
     const persisted = MeasurementProjectSchema.parse(JSON.parse(await readFile(path.join(projectDir, "project.json"), "utf8")) as unknown);
     expect(persisted.artifacts.portableExportManifest).toBe(body.data.portableExportManifest);
     expect(await readLivePortableExportEvidence(config, persisted)).toMatchObject({ status: "ready", evidence: { projectId, modelHash: modelLock.modelHash } });
+    const manifestPath = path.join(outputDir, body.data.portableExportManifest);
+    const originalManifest = await readFile(manifestPath);
+    const exportedBlendPath = path.join(outputDir, body.data.artifacts.find((artifact) => artifact.format === "blend")!.path);
+    const originalExportedBlend = await readFile(exportedBlendPath);
+    const forgedBlend = Buffer.from("forged-but-self-consistent-export");
+    const forgedManifest = JSON.parse(originalManifest.toString("utf8")) as { artifacts: Array<{ format: string; sizeBytes: number; sha256: string }> };
+    const forgedBlendEntry = forgedManifest.artifacts.find((artifact) => artifact.format === "blend")!;
+    forgedBlendEntry.sizeBytes = forgedBlend.byteLength; forgedBlendEntry.sha256 = createHash("sha256").update(forgedBlend).digest("hex");
+    await writeFile(exportedBlendPath, forgedBlend); await writeFile(manifestPath, JSON.stringify(forgedManifest));
+    expect(await readLivePortableExportEvidence(config, persisted)).toEqual({ status: "blocked", code: "portable_export_blend_model_lock_mismatch" });
+    await writeFile(exportedBlendPath, originalExportedBlend); await writeFile(manifestPath, originalManifest);
     const glbPath = path.join(outputDir, body.data.artifacts.find((artifact) => artifact.format === "glb")!.path);
     const replacement = path.join(projectDir, "artifacts", "replacement.glb");
     await copyFile(glbPath, replacement); await rm(glbPath); await symlink(replacement, glbPath);

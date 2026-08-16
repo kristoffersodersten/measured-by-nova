@@ -218,6 +218,9 @@ may show delivery as ready. Missing, malformed, duplicate, unexpected,
 symlinked, replaced, or changed-during-validation artifacts fail closed. The
 project and manifest writes are atomic; failed evidence persistence removes all
 new export artifacts so a retry cannot inherit a partial delivery.
+Portable delivery and preview remain independent states: a valid preview never
+implies a portable export, and a valid portable export never claims that a
+preview exists. The exported BLEND must itself retain the exact model-lock hash.
 
 All accepted Environment Truth fields, including data scope and any fallback
 cause/primary failure, remain visible. Operator holds are explicit,

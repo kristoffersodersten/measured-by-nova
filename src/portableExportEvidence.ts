@@ -57,6 +57,7 @@ export async function readLivePortableExportEvidence(config: BlenderConfig, proj
       aggregateBytes += identity.sizeBytes;
       if (aggregateBytes > 8 * 1024 * 1024 * 1024) return { status: "blocked", code: "portable_export_bytes_exceeded" };
       if (identity.sizeBytes !== artifact.sizeBytes || identity.sha256 !== artifact.sha256) return { status: "blocked", code: "portable_export_artifact_drift" };
+      if (artifact.format === "blend" && identity.sha256 !== evidence.modelHash) return { status: "blocked", code: "portable_export_blend_model_lock_mismatch" };
     }
     return { status: "ready", evidence };
   } catch (error) {

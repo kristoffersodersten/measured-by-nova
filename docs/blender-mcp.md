@@ -139,6 +139,9 @@ tool response as durable delivery truth. Revalidation rejects artifact drift,
 missing or duplicate formats, symlinks, path escape, malformed evidence, and
 files replaced while hashing. Evidence persistence failure removes the complete
 new export set and manifest, leaving the operation explicitly retryable.
+Duplicate requested formats fail schema validation before Blender starts, and
+the exported BLEND hash must equal the reviewed model-lock hash even if a
+manifest and artifact are replaced together.
 
 The digital-viewing preset tools are intake gates. They describe and validate
 what photos, measurements, material records, texture evidence, and condition
