@@ -99,6 +99,7 @@ Every new project carries this source-of-truth policy:
 
 | Tool | Purpose |
 | --- | --- |
+| `verify_publication_capture_package` | Verifies exact package artifacts and approved Ed25519 public-key identity, persists project-bound trust atomically, and prevents manual, invalid, changed, or revoked evidence from becoming Verified. |
 | `create_measurement_project` | Creates an empty measurement project. |
 | `import_reference_photos` | Stores photos as low-confidence references or validation inputs. |
 | `define_known_dimension` | Adds an authoritative or measured dimension constraint. |

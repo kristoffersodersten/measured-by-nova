@@ -7,6 +7,12 @@ const RelativePathSchema = z.string().min(1).max(240).refine(
   (value) => !value.startsWith("/") && !value.split("/").includes(".."),
   "Artifact paths must be relative and stay inside the capture package."
 );
+export const PublicationEvidenceScopeSchema = z.object({
+  id: IdSchema,
+  kind: z.enum(["measurement", "material_source", "known_deviation"]),
+  required: z.boolean(),
+  verified: z.boolean()
+}).strict();
 
 export const CaptureArtifactManifestEntrySchema = z.object({
   path: RelativePathSchema,
@@ -23,7 +29,8 @@ const CapturePackageBindingSchema = z.object({
   kitId: IdSchema,
   commissioningPartyId: IdSchema,
   capturedAt: z.string().datetime({ offset: true }),
-  manifest: z.array(CaptureArtifactManifestEntrySchema).min(1)
+  evidenceScopes: z.array(PublicationEvidenceScopeSchema).min(1).max(10_000),
+  manifest: z.array(CaptureArtifactManifestEntrySchema).min(1).max(10_000)
 }).strict().superRefine((value, context) => {
   const paths = new Set<string>();
   for (const entry of value.manifest) {
@@ -35,6 +42,13 @@ const CapturePackageBindingSchema = z.object({
       });
     }
     paths.add(entry.path);
+  }
+  const scopeIds = new Set<string>();
+  for (const scope of value.evidenceScopes) {
+    if (scopeIds.has(scope.id)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["evidenceScopes"], message: `Duplicate evidence scope ID: ${scope.id}` });
+    }
+    scopeIds.add(scope.id);
   }
 });
 
@@ -62,7 +76,9 @@ export type PublicationCapturePackage = z.infer<typeof PublicationCapturePackage
 
 export interface CaptureArtifactContent {
   path: string;
-  content: Uint8Array;
+  content?: Uint8Array;
+  observedSha256?: string;
+  observedSizeBytes?: number;
 }
 
 export const CapturePackageVerificationCodeSchema = z.enum([
@@ -73,6 +89,7 @@ export const CapturePackageVerificationCodeSchema = z.enum([
   "artifact_hash_mismatch",
   "signed_payload_hash_mismatch",
   "signing_key_unknown",
+  "signing_key_revoked",
   "signature_invalid"
 ]);
 export type CapturePackageVerificationCode = z.infer<typeof CapturePackageVerificationCodeSchema>;
@@ -99,6 +116,7 @@ function canonicalBinding(binding: z.infer<typeof CapturePackageBindingSchema>):
     kitId: binding.kitId,
     commissioningPartyId: binding.commissioningPartyId,
     capturedAt: binding.capturedAt,
+    evidenceScopes: [...binding.evidenceScopes].sort((left, right) => left.id.localeCompare(right.id)),
     manifest: [...binding.manifest]
       .sort((left, right) => left.path.localeCompare(right.path))
       .map(({ path, sha256: artifactHash, sizeBytes }) => ({ path, sha256: artifactHash, sizeBytes }))
@@ -127,10 +145,12 @@ export function verifyPublicationCapturePackage(
       codes.push("artifact_missing");
       continue;
     }
-    if (artifact.content.byteLength !== entry.sizeBytes) {
+    const observedSizeBytes = artifact.observedSizeBytes ?? artifact.content?.byteLength;
+    const observedSha256 = artifact.observedSha256 ?? (artifact.content ? sha256(artifact.content) : undefined);
+    if (observedSizeBytes !== entry.sizeBytes) {
       codes.push("artifact_size_mismatch");
     }
-    if (sha256(artifact.content) !== entry.sha256) {
+    if (observedSha256 !== entry.sha256) {
       codes.push("artifact_hash_mismatch");
     }
   }
@@ -185,13 +205,6 @@ export const PublicTrustCategorySchema = z.enum([
 ]);
 export type PublicTrustCategory = z.infer<typeof PublicTrustCategorySchema>;
 
-export const PublicationEvidenceScopeSchema = z.object({
-  id: IdSchema,
-  kind: z.enum(["measurement", "material_source", "known_deviation"]),
-  required: z.boolean(),
-  verified: z.boolean()
-}).strict();
-
 export const PublicationDisputeSchema = z.object({
   scopeId: IdSchema,
   status: z.literal("open"),
@@ -208,15 +221,15 @@ export interface PublicTrustClassification {
 export function classifyPublicTrust(input: {
   capturePackage: PublicationCapturePackage;
   packageVerification: CapturePackageVerificationResult;
-  evidenceScopes: z.infer<typeof PublicationEvidenceScopeSchema>[];
   disputes?: z.infer<typeof PublicationDisputeSchema>[];
 }): PublicTrustClassification {
   const capturePackage = PublicationCapturePackageSchema.parse(input.capturePackage);
-  const scopes = z.array(PublicationEvidenceScopeSchema).parse(input.evidenceScopes);
+  const scopes = capturePackage.binding.evidenceScopes;
   const disputes = z.array(PublicationDisputeSchema).parse(input.disputes ?? []);
-  const verifiedScopeIds = scopes.filter((scope) => scope.verified).map((scope) => scope.id).sort();
+  const claimsAuthenticated = capturePackage.source === "native_app" && input.packageVerification.valid;
+  const verifiedScopeIds = claimsAuthenticated ? scopes.filter((scope) => scope.verified).map((scope) => scope.id).sort() : [];
   const unverifiedRequiredScopeIds = scopes
-    .filter((scope) => scope.required && !scope.verified)
+    .filter((scope) => scope.required && (!claimsAuthenticated || !scope.verified))
     .map((scope) => scope.id)
     .sort();
   const disputedScopeIds = [...new Set(disputes.map((dispute) => dispute.scopeId))].sort();

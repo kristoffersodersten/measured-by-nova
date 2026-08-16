@@ -73,6 +73,7 @@ import {
   type ProfileInstance
 } from "./measurementContracts.js";
 import { buildWebViewerPackage, validateWebViewerPackage } from "./webViewer.js";
+import { verifyAndStorePublicationTrust, VerifyPublicationCaptureInputSchema } from "./publicationTrustStore.js";
 
 type MachineReason = {
   id?: string;
@@ -97,6 +98,18 @@ const PermitExportStrategies = [
 ];
 
 export function registerMeasurementTools(server: McpServer, config: BlenderConfig): void {
+  register(server, "verify_publication_capture_package", "Verify and persist live publication trust for an explicit native or manual capture package.", VerifyPublicationCaptureInputSchema, async (input) => {
+    const req = requestId();
+    const payload = VerifyPublicationCaptureInputSchema.parse(input);
+    const executionGate = evaluateExecutionIntent(payload.executionIntent, "verify-publication-capture");
+    if (!executionGate.ok) return failExecutionIntent(req, executionGate);
+    try {
+      const trust = await verifyAndStorePublicationTrust(config, payload);
+      await appendRequestLog(config, payload.projectId, req, "verify_publication_capture_package", { projectId: payload.projectId, packageManifestPath: payload.packageManifestPath, publicKeyPath: payload.publicKeyPath, classification: trust.classification, verification: trust.verification });
+      const action = buildExecutionActionEvidence(payload.executionIntent, { changedArtifacts: [path.join("measurement-projects", payload.projectId, ".publication-trust.json")], verificationResults: [{ check: "schema", ok: true, evidence: "Capture package and trust evidence matched strict schemas." }, { check: "quality-gate", ok: trust.classification.category !== "disputed", evidence: `Public category: ${trust.classification.category}.` }, { check: "manifest", ok: trust.verification.valid || trust.classification.category === "reference", evidence: "Live artifacts, key identity, signature, and package bindings were evaluated without fallback." }], manifest: trust });
+      return ok(req, { trust, execution: { intent: payload.executionIntent, action } });
+    } catch (error) { return fail(req, "publication_trust_verification_failed", error instanceof Error ? error.message : String(error)); }
+  });
   register(server, "create_project_from_capture", "Convert a verified real capture set into a measurement project without inferring or reconstructing geometry.", RealCarportCaptureSchema, async (input) => {
     const req = requestId();
     const result = captureToFixture(input);

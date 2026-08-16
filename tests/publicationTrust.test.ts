@@ -20,6 +20,10 @@ const binding = {
   kitId: "kit-1",
   commissioningPartyId: "customer-1",
   capturedAt: "2026-08-05T10:00:00.000Z",
+  evidenceScopes: [
+    { id: "dimensions", kind: "measurement" as const, required: true, verified: true },
+    { id: "materials", kind: "material_source" as const, required: true, verified: true }
+  ],
   manifest: [{
     path: artifact.path,
     sha256: createHash("sha256").update(content).digest("hex"),
@@ -54,11 +58,7 @@ describe("publication trust contract", () => {
     ]);
     expect(classifyPublicTrust({
       capturePackage,
-      packageVerification: verification,
-      evidenceScopes: [
-        { id: "dimensions", kind: "measurement", required: true, verified: true },
-        { id: "materials", kind: "material_source", required: true, verified: true }
-      ]
+      packageVerification: verification
     }).category).toBe("verified");
   });
 
@@ -74,9 +74,8 @@ describe("publication trust contract", () => {
     expect(verification.codes).toEqual(expect.arrayContaining(["artifact_size_mismatch", "artifact_hash_mismatch"]));
     expect(classifyPublicTrust({
       capturePackage,
-      packageVerification: verification,
-      evidenceScopes: [{ id: "dimensions", kind: "measurement", required: true, verified: true }]
-    }).category).toBe("reference");
+      packageVerification: verification
+    })).toMatchObject({ category: "reference", verifiedScopeIds: [], unverifiedRequiredScopeIds: ["dimensions", "materials"] });
   });
 
   it("keeps manual uploads as reference regardless of verified evidence declarations", () => {
@@ -86,8 +85,7 @@ describe("publication trust contract", () => {
     expect(verification.codes).toContain("manual_upload");
     expect(classifyPublicTrust({
       capturePackage,
-      packageVerification: verification,
-      evidenceScopes: [{ id: "dimensions", kind: "measurement", required: true, verified: true }]
+      packageVerification: verification
     }).category).toBe("reference");
   });
 
@@ -99,15 +97,15 @@ describe("publication trust contract", () => {
       { id: "materials", kind: "material_source" as const, required: true, verified: false }
     ];
 
-    expect(classifyPublicTrust({ capturePackage, packageVerification: verification, evidenceScopes })).toMatchObject({
+    const partialPackage = { ...capturePackage, binding: { ...capturePackage.binding, evidenceScopes } };
+    expect(classifyPublicTrust({ capturePackage: partialPackage, packageVerification: verification })).toMatchObject({
       category: "partially_verified",
       verifiedScopeIds: ["dimensions"],
       unverifiedRequiredScopeIds: ["materials"]
     });
     expect(classifyPublicTrust({
-      capturePackage,
+      capturePackage: partialPackage,
       packageVerification: verification,
-      evidenceScopes,
       disputes: [{ scopeId: "dimensions", status: "open", reason: "Measurement is contested." }]
     })).toMatchObject({ category: "disputed", disputedScopeIds: ["dimensions"] });
   });
@@ -127,5 +125,9 @@ describe("publication trust contract", () => {
       average: 4.8,
       count: 5
     });
+  });
+
+  it("rejects ambiguous duplicate signed evidence scope IDs", () => {
+    expect(() => PublicationCapturePackageSchema.parse({ source: "manual_upload", binding: { ...binding, evidenceScopes: [binding.evidenceScopes[0], { ...binding.evidenceScopes[0], verified: false }] } })).toThrow("Duplicate evidence scope ID");
   });
 });

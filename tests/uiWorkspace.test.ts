@@ -12,6 +12,7 @@ import { MeasurementProjectSchema } from "../src/measurementContracts.js";
 import { hashValidationSourceProject } from "../src/modelLock.js";
 
 const openServers: ReturnType<typeof startUiServer>[] = [];
+const fetchForbiddenPorts = new Set([1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79, 87, 95, 101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137, 139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515, 526, 530, 531, 532, 540, 548, 554, 556, 563, 587, 601, 636, 989, 990, 992, 993, 995, 1719, 1720, 1723, 2049, 3659, 4045, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6697, 10080]);
 const config = (outputDir = path.join(os.tmpdir(), "nova-ui-empty")): UiRuntimeConfig => ({
   host: "127.0.0.1", port: 0, outputDir, environmentTruth: { provider: "Hetzner", engine: "Blender 4.0.2", endpoint: "remote-ci-runner",
   executionGeography: "remote", owner: "project-ci", costClass: "included-remote", latencyClass: "long-running",
@@ -25,8 +26,14 @@ afterEach(async () => { await Promise.all(openServers.splice(0).map((server) => 
 }))); });
 
 async function runningServer(runtimeConfig = config()) {
-  const server = startUiServer(runtimeConfig); openServers.push(server); if (!server.listening) await once(server, "listening");
-  const port = (server.address() as AddressInfo).port; return { server, origin: `http://127.0.0.1:${port}` };
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const server = startUiServer(runtimeConfig); openServers.push(server); if (!server.listening) await once(server, "listening");
+    const port = (server.address() as AddressInfo).port;
+    if (!fetchForbiddenPorts.has(port)) return { server, origin: `http://127.0.0.1:${port}` };
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    openServers.splice(openServers.indexOf(server), 1);
+  }
+  throw new Error("ui_test_safe_ephemeral_port_unavailable");
 }
 
 async function statusWithHost(url: string, host: string): Promise<number> {
@@ -92,7 +99,9 @@ describe("executable Measured workspace", () => {
     const projectDir = path.join(outputDir, "measurement-projects", fixture.projectId);
     await mkdir(projectDir, { recursive: true });
     await writeFile(path.join(projectDir, "project.json"), JSON.stringify(validated), "utf8");
-    expect((await loadUiProjectWorkspace(config(outputDir), fixture.projectId)).project.validationPassed).toBe(true);
+    const trustedWorkspace = await loadUiProjectWorkspace(config(outputDir), fixture.projectId);
+    expect(trustedWorkspace.project.validationPassed).toBe(true);
+    expect(trustedWorkspace.surface.panels[0]?.states[0]).toMatchObject({ status: "blocked", blockingReason: "Verify an explicit native or manual capture package before publication." });
     const mutated = { ...validated, assumptions: [...validated.assumptions, { id: "late-change", text: "Changed after validation", confidence: "medium" as const, source: "user_declared" as const, affectsGeometry: false }] };
     await writeFile(path.join(projectDir, "project.json"), JSON.stringify(mutated), "utf8");
     expect((await loadUiProjectWorkspace(config(outputDir), fixture.projectId)).project.validationPassed).toBe(false);
