@@ -241,6 +241,18 @@ network forbidden, telemetry off, fallback none, canonical no-symlink reads,
 bounded bytes, content hashes, and a complete gate recheck after every read.
 Operator hold removes all customer-viewing links and blocks their endpoints.
 
+The customer surface also exposes a separate public-evidence section only while
+the same capture-trust, current-validation, current-model-lock and operator-hold
+gates pass. It displays the public category (`Verified`, `Partially Verified`,
+`Reference`, or `Disputed`), declared dimensions with unit/source/confidence,
+declared material provenance, and explicitly typed known-deviation scopes with
+their verified, reference, or disputed status. It does not
+publish a combined numeric seller score. Preview pixels never upgrade a
+measurement or material claim, and an empty condition list is explicitly not
+represented as proof that defects are absent. All displayed values pass strict
+bounded schemas and HTML escaping; a disputed live package or operator hold
+removes the entire evidence section.
+
 All accepted Environment Truth fields, including data scope and any fallback
 cause/primary failure, remain visible. Operator holds are explicit,
 project-scoped, atomically persisted with mode `0600`, survive restart, and are

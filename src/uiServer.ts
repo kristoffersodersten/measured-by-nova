@@ -24,7 +24,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
   if (request.method === "GET" && url.pathname === "/") {
     const projectId = url.searchParams.get("projectId");
     if (!projectId) return send(response, 200, "text/html; charset=utf-8", renderWorkspaceHtml(buildExecutableWorkspace(config)));
-    try { const workspace = await loadUiProjectWorkspace(config, projectId); return send(response, 200, "text/html; charset=utf-8", renderWorkspaceHtml(workspace.surface, workspace.operatorDecision?.actor ?? null, workspace.deliveryArtifacts, workspace.customerViews)); }
+    try { const workspace = await loadUiProjectWorkspace(config, projectId); return send(response, 200, "text/html; charset=utf-8", renderWorkspaceHtml(workspace.surface, workspace.operatorDecision?.actor ?? null, workspace.deliveryArtifacts, workspace.customerViews, workspace.customerEvidence)); }
     catch (error) { return send(response, 404, "application/json", JSON.stringify({ error: workspaceError(error) })); }
   }
   if (request.method === "GET" && request.url === "/workspace.js") return send(response, 200, "text/javascript; charset=utf-8", workspaceScript);

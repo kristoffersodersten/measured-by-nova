@@ -65,6 +65,26 @@ describe("executable Measured workspace", () => {
     expect(() => renderWorkspaceHtml(surface, null, [{ format: "glb", sizeBytes: 10, url: "/api/delivery-artifact?projectId=p&format=obj" }])).toThrow("delivery_artifact_url_invalid");
   });
 
+  it("renders bounded customer provenance without a public numeric score and removes it on hold", () => {
+    const surface = buildExecutableWorkspace(config());
+    const evidence = {
+      trustCategory: "partially_verified" as const,
+      measurements: [{ id: "dimension-1", label: "Width <script>", value: 4200, unit: "mm" as const, confidence: "high" as const, source: "manual_measurement" as const }],
+      materials: [{ id: "material-1", label: "Paint & glass", target: "body", confidence: "medium" as const, source: "photo_reference" as const, verified: false }],
+      conditions: [{ id: "scratch-1", status: "disputed" as const }],
+      limitation: "Only declared evidence is shown. Absence of a condition record does not prove absence of defects." as const
+    };
+    const html = renderWorkspaceHtml(surface, null, [], {}, evidence);
+    expect(html).toContain('id="customer-evidence"');
+    expect(html).toContain("Partially Verified");
+    expect(html).toContain("4200 mm · high · manual_measurement");
+    expect(html).toContain("Paint &amp; glass");
+    expect(html).toContain("scratch-1");
+    expect(html).toContain("No combined seller score");
+    expect(html).not.toContain("Width <script>");
+    expect(renderWorkspaceHtml(surface, "operator", [], {}, evidence)).not.toContain('id="customer-evidence"');
+  });
+
   it("serves loopback HTML and explicit workspace state with security headers", async () => {
     const { origin } = await runningServer();
     const page = await fetch(origin); const state = await fetch(`${origin}/api/workspace`);

@@ -10,6 +10,7 @@ import { ExecutionIntentSchema } from "./executionGate.js";
 import {
   classifyPublicTrust,
   type CaptureArtifactContent,
+  PublicationEvidenceScopeSchema,
   PublicationCapturePackageSchema,
   PublicationDisputeSchema,
   verifyPublicationCapturePackage
@@ -35,6 +36,7 @@ const StoredPublicationTrustSchema = z.object({
   packageManifestPath: RelativePathSchema,
   publicKeyPath: RelativePathSchema.optional(),
   packageManifestSha256: z.string().length(64),
+  evidenceScopes: z.array(PublicationEvidenceScopeSchema).max(10_000).default([]),
   disputes: z.array(PublicationDisputeSchema).max(10_000),
   verification: z.object({ valid: z.boolean(), codes: z.array(z.string()), verifiedBindings: z.array(z.string()) }).strict(),
   classification: z.object({ category: z.enum(["verified", "partially_verified", "reference", "disputed"]), verifiedScopeIds: z.array(z.string()), unverifiedRequiredScopeIds: z.array(z.string()), disputedScopeIds: z.array(z.string()) }).strict()
@@ -147,7 +149,7 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
   const classification = (capturePackage.source === "native_app" && !verification.valid) || (capturePackage.source === "manual_upload" && integrityInvalid)
     ? { ...classified, category: "disputed" as const, disputedScopeIds: [...new Set([...classified.disputedScopeIds, ...capturePackage.binding.evidenceScopes.map((scope) => scope.id)])].sort() }
     : classified;
-  return StoredPublicationTrustSchema.parse({ schemaVersion: 1, projectId: input.projectId, packageManifestPath: input.packageManifestPath, ...(input.publicKeyPath ? { publicKeyPath: input.publicKeyPath } : {}), packageManifestSha256: createHash("sha256").update(manifestBytes).digest("hex"), disputes: input.disputes, verification, classification });
+  return StoredPublicationTrustSchema.parse({ schemaVersion: 1, projectId: input.projectId, packageManifestPath: input.packageManifestPath, ...(input.publicKeyPath ? { publicKeyPath: input.publicKeyPath } : {}), packageManifestSha256: createHash("sha256").update(manifestBytes).digest("hex"), evidenceScopes: capturePackage.binding.evidenceScopes, disputes: input.disputes, verification, classification });
 }
 
 async function hashStableArtifact(artifactPath: string): Promise<Pick<CaptureArtifactContent, "observedSha256" | "observedSizeBytes">> {
