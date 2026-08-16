@@ -61,6 +61,7 @@ describe("executable Measured workspace", () => {
   it("fails closed for unsafe or unbound delivery links", () => {
     const surface = buildExecutableWorkspace(config());
     expect(() => renderWorkspaceHtml(surface, null, [{ format: "glb", sizeBytes: 10, url: "javascript:alert(1)" }])).toThrow("delivery_artifact_url_invalid");
+    expect(() => renderWorkspaceHtml(surface, null, [{ format: "glb", sizeBytes: 10, url: "http://[" }])).toThrow("delivery_artifact_url_invalid");
     expect(() => renderWorkspaceHtml(surface, null, [{ format: "glb", sizeBytes: 10, url: "/api/delivery-artifact?projectId=p&format=obj" }])).toThrow("delivery_artifact_url_invalid");
   });
 

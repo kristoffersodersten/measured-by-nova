@@ -48,7 +48,9 @@ const UiDeliveryArtifactSchema = z.object({
   sizeBytes: z.number().int().positive().max(256 * 1024 * 1024),
   url: z.string().min(1)
 }).strict().superRefine((artifact, context) => {
-  const parsed = new URL(artifact.url, "http://127.0.0.1");
+  let parsed: URL;
+  try { parsed = new URL(artifact.url, "http://127.0.0.1"); }
+  catch { context.addIssue({ code: "custom", message: "delivery_artifact_url_invalid", path: ["url"] }); return; }
   const projectId = parsed.searchParams.get("projectId");
   const queryKeys = [...parsed.searchParams.keys()];
   if (parsed.origin !== "http://127.0.0.1" || parsed.pathname !== "/api/delivery-artifact" || parsed.hash !== "" ||

@@ -34,11 +34,13 @@ export async function loadUiProjectWorkspace(config: UiRuntimeConfig, projectId:
   const previewEvidence = await validatedPreviewEvidence(config, project.projectId, project.artifacts.digitalViewingRenderManifest, project.artifacts.digitalViewingPreview);
   const portableExport = await readLivePortableExportEvidence(asBlenderConfig(config), project);
   const captureTrusted = captureReady && trust !== null && trust.classification.category !== "disputed";
+  const oversizedDelivery = portableExport.status === "ready" && portableExport.evidence.artifacts.some((artifact) => artifact.sizeBytes > 256 * 1024 * 1024);
   const deliveryBlockingReason = !captureTrusted
     ? trust?.classification.category === "disputed" ? "capture_trust_disputed" : "capture_trust_incomplete"
     : !validationPassed ? "project_validation_not_passing"
     : !lock.ok ? "model_lock_invalid"
     : portableExport.status === "blocked" ? portableExport.code
+    : oversizedDelivery ? "workspace_delivery_artifact_too_large"
     : undefined;
   const surface = buildExecutableWorkspace(config);
   surface.panels[0].states = [
@@ -63,8 +65,18 @@ export async function readUiDeliveryArtifact(config: UiRuntimeConfig, projectId:
   const deliveryState = workspace.surface.panels[1].states.find((state) => state.id === "portable-delivery");
   if (deliveryState?.status !== "ready") throw new Error(`workspace_delivery_not_ready_${deliveryState?.blockingReason?.replace(/[^a-z_]/g, "_") ?? "pending"}`);
   const project = await readUiProject(config, projectId);
-  const artifact = await readVerifiedPortableExportArtifact(asBlenderConfig(config), project, format as PortableExportFormat);
-  if (await readDecision(config, projectId) !== null) throw new Error("workspace_delivery_held");
+  let artifact;
+  try { artifact = await readVerifiedPortableExportArtifact(asBlenderConfig(config), project, format as PortableExportFormat); }
+  catch (error) {
+    const code = error instanceof Error ? error.message.replace(/[^a-z_]/g, "_") : "revalidation_failed";
+    throw new Error(code.startsWith("workspace_") ? code : `workspace_delivery_not_ready_${code}`);
+  }
+  const finalWorkspace = await loadUiProjectWorkspace(config, projectId);
+  if (finalWorkspace.operatorDecision !== null) throw new Error("workspace_delivery_held");
+  if (!finalWorkspace.deliveryArtifacts.some((entry) => entry.format === format)) {
+    const finalState = finalWorkspace.surface.panels[1].states.find((state) => state.id === "portable-delivery");
+    throw new Error(`workspace_delivery_not_ready_${finalState?.blockingReason?.replace(/[^a-z_]/g, "_") ?? "gate_changed"}`);
+  }
   return artifact;
 }
 

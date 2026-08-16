@@ -80,9 +80,23 @@ export async function readVerifiedPortableExportArtifact(config: BlenderConfig, 
   const bytes = await readStableFile(artifactPath);
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   if (bytes.byteLength !== artifact.sizeBytes || sha256 !== artifact.sha256 || (format === "blend" && sha256 !== live.evidence.modelHash)) throw new Error("workspace_delivery_artifact_drift");
+  validateArtifactBytes(format, bytes);
   const filename = path.basename(artifact.path);
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(filename)) throw new Error("workspace_delivery_filename_invalid");
   return { bytes, filename, contentType: contentTypeFor(format), sha256 };
+}
+
+function validateArtifactBytes(format: PortableExportFormat, bytes: Buffer): void {
+  const blendHeaderValid = bytes.subarray(0, 7).toString("ascii") === "BLENDER" || bytes.subarray(0, 4).equals(Buffer.from([0x28, 0xb5, 0x2f, 0xfd]));
+  const objHasVertex = bytes.subarray(0, 2).equals(Buffer.from("v ")) || bytes.includes(Buffer.from("\nv ")) || bytes.includes(Buffer.from("\rv "));
+  const zipEocd = bytes.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]), bytes.byteLength - 22);
+  const completeZip = zipEocd >= Math.max(0, bytes.byteLength - 65_557) && zipEocd + 22 <= bytes.byteLength && zipEocd + 22 + bytes.readUInt16LE(zipEocd + 20) === bytes.byteLength;
+  const valid = format === "blend" ? blendHeaderValid
+    : format === "glb" ? bytes.subarray(0, 4).toString("ascii") === "glTF"
+    : format === "obj" ? objHasVertex
+    : format === "mtl" ? bytes.includes(Buffer.from("newmtl "))
+    : bytes.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) && (bytes.includes(Buffer.from("PXR-USDC")) || bytes.includes(Buffer.from("#usda"))) && completeZip;
+  if (!valid) throw new Error("workspace_delivery_artifact_format_invalid");
 }
 
 function contentTypeFor(format: PortableExportFormat): string {

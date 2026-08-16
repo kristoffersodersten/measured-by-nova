@@ -90,6 +90,14 @@ describe("locked portable export Blender runtime", () => {
     await expect(readUiDeliveryArtifact(uiConfig, projectId, "blend")).rejects.toThrow("workspace_delivery_not_ready_portable_export_blend_model_lock_mismatch");
     await writeFile(exportedBlendPath, originalExportedBlend); await writeFile(manifestPath, originalManifest);
     const glbPath = path.join(outputDir, body.data.artifacts.find((artifact) => artifact.format === "glb")!.path);
+    const originalGlb = await readFile(glbPath);
+    const forgedGlb = Buffer.from("not-a-real-glb");
+    const forgedGlbManifest = JSON.parse(originalManifest.toString("utf8")) as { artifacts: Array<{ format: string; sizeBytes: number; sha256: string }> };
+    const forgedGlbEntry = forgedGlbManifest.artifacts.find((artifact) => artifact.format === "glb")!;
+    forgedGlbEntry.sizeBytes = forgedGlb.byteLength; forgedGlbEntry.sha256 = createHash("sha256").update(forgedGlb).digest("hex");
+    await writeFile(glbPath, forgedGlb); await writeFile(manifestPath, JSON.stringify(forgedGlbManifest));
+    await expect(readUiDeliveryArtifact(uiConfig, projectId, "glb")).rejects.toThrow("workspace_delivery_artifact_format_invalid");
+    await writeFile(glbPath, originalGlb); await writeFile(manifestPath, originalManifest);
     const replacement = path.join(projectDir, "artifacts", "replacement.glb");
     await copyFile(glbPath, replacement); await rm(glbPath); await symlink(replacement, glbPath);
     expect(await readLivePortableExportEvidence(config, persisted)).toEqual({ status: "blocked", code: "portable_export_artifact_path_invalid" });
