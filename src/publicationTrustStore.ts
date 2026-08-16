@@ -1,4 +1,5 @@
 import { createHash, createPublicKey, type KeyObject } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { readFile, readdir, realpath, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
@@ -7,6 +8,7 @@ import { safeOutputPath } from "./blenderRunner.js";
 import { ExecutionIntentSchema } from "./executionGate.js";
 import {
   classifyPublicTrust,
+  type CaptureArtifactContent,
   PublicationCapturePackageSchema,
   PublicationDisputeSchema,
   verifyPublicationCapturePackage
@@ -39,7 +41,9 @@ export type StoredPublicationTrust = z.infer<typeof StoredPublicationTrustSchema
 
 export async function verifyAndStorePublicationTrust(config: BlenderConfig, input: unknown): Promise<StoredPublicationTrust> {
   const payload = VerifyPublicationCaptureInputSchema.parse(input);
-  const evaluated = await evaluatePublicationTrust(config, payload);
+  const existing = await readStoredPublicationTrust(config, payload.projectId);
+  const disputes = [...new Map([...(existing?.disputes ?? []), ...payload.disputes].map((dispute) => [dispute.scopeId, dispute])).values()];
+  const evaluated = await evaluatePublicationTrust(config, { ...payload, disputes });
   const evidencePath = trustEvidencePath(config, payload.projectId);
   await assertProjectIdentity(config, payload.projectId);
   const temporary = `${evidencePath}.tmp-${process.pid}`;
@@ -49,9 +53,8 @@ export async function verifyAndStorePublicationTrust(config: BlenderConfig, inpu
 }
 
 export async function readLivePublicationTrust(config: BlenderConfig, projectId: string): Promise<StoredPublicationTrust | null> {
-  let stored: StoredPublicationTrust;
-  try { stored = StoredPublicationTrustSchema.parse(JSON.parse(await readFile(trustEvidencePath(config, projectId), "utf8"))); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw new Error("publication_trust_evidence_invalid"); }
+  const stored = await readStoredPublicationTrust(config, projectId);
+  if (!stored) return null;
   if (stored.projectId !== projectId) throw new Error("publication_trust_project_mismatch");
   let live: StoredPublicationTrust;
   try { live = await evaluatePublicationTrust(config, stored); }
@@ -82,11 +85,15 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
   if (capturePackage.binding.projectId !== input.projectId) throw new Error("publication_trust_project_mismatch");
   const packageDirectory = path.dirname(manifestPath);
   const actual = (await listFiles(packageDirectory)).filter((entry) => entry !== path.basename(manifestPath));
-  const artifacts = await Promise.all(actual.sort().map(async (relative) => {
+  const artifacts: CaptureArtifactContent[] = [];
+  for (const relative of actual.sort()) {
     const artifactPath = path.join(packageDirectory, relative);
     await assertWithinRoot(packageDirectory, artifactPath);
-    return { path: relative, content: await readFile(artifactPath) };
-  }));
+    const hash = createHash("sha256");
+    let observedSizeBytes = 0;
+    for await (const chunk of createReadStream(artifactPath)) { hash.update(chunk); observedSizeBytes += chunk.length; }
+    artifacts.push({ path: relative, observedSha256: hash.digest("hex"), observedSizeBytes });
+  }
   let publicKey: KeyObject | undefined;
   let keyRevoked = false;
   if (capturePackage.source === "native_app") {
@@ -108,7 +115,8 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
     ? { ...evaluatedVerification, codes: [...new Set(evaluatedVerification.codes.map((code) => code === "signing_key_unknown" ? "signing_key_revoked" as const : code))] }
     : evaluatedVerification;
   const classified = classifyPublicTrust({ capturePackage, packageVerification: verification, disputes: input.disputes });
-  const classification = capturePackage.source === "native_app" && !verification.valid
+  const integrityInvalid = verification.codes.some((code) => code !== "manual_upload");
+  const classification = (capturePackage.source === "native_app" && !verification.valid) || (capturePackage.source === "manual_upload" && integrityInvalid)
     ? { ...classified, category: "disputed" as const, disputedScopeIds: [...new Set([...classified.disputedScopeIds, ...capturePackage.binding.evidenceScopes.map((scope) => scope.id)])].sort() }
     : classified;
   return StoredPublicationTrustSchema.parse({ schemaVersion: 1, projectId: input.projectId, packageManifestPath: input.packageManifestPath, ...(input.publicKeyPath ? { publicKeyPath: input.publicKeyPath } : {}), packageManifestSha256: createHash("sha256").update(manifestBytes).digest("hex"), disputes: input.disputes, verification, classification });
@@ -147,5 +155,9 @@ async function isKeyRevoked(config: BlenderConfig, keyId: string): Promise<boole
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw new Error("publication_trust_revocation_registry_invalid");
   }
+}
+async function readStoredPublicationTrust(config: BlenderConfig, projectId: string): Promise<StoredPublicationTrust | null> {
+  try { return StoredPublicationTrustSchema.parse(JSON.parse(await readFile(trustEvidencePath(config, projectId), "utf8"))); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw new Error("publication_trust_evidence_invalid"); }
 }
 function trustEvidencePath(config: BlenderConfig, projectId: string): string { return safeOutputPath(config.outputDir, path.join("measurement-projects", projectId, ".publication-trust.json")); }

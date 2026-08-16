@@ -31,6 +31,8 @@ describe("publication trust store", () => {
     await writeFile(path.join(packageDir, "capture-package.json"), JSON.stringify(packageDocument, null, 2));
     expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.classification.category).toBe("disputed");
     await writeFile(path.join(packageDir, "capture-package.json"), packageBytes);
+    expect((await verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { ...input, disputes: [{ scopeId: "dimensions", status: "open", reason: "Operator dispute remains open." }] })).classification.category).toBe("disputed");
+    expect((await verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, input)).classification.category).toBe("disputed");
     await writeFile(path.join(packageDir, "evidence.json"), "mutated");
     expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.classification.category).toBe("disputed");
     await rm(path.join(packageDir, "evidence.json"));
@@ -72,5 +74,7 @@ describe("publication trust store", () => {
     const result = await verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { projectId, executionIntent: intent, packageManifestPath: "captures/manual-1/capture-package.json" });
     expect(result.classification.category).toBe("reference");
     expect(result.verification.codes).toContain("manual_upload");
+    await writeFile(path.join(packageDir, "evidence.json"), "changed manual evidence");
+    expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.classification.category).toBe("disputed");
   });
 });

@@ -76,7 +76,9 @@ export type PublicationCapturePackage = z.infer<typeof PublicationCapturePackage
 
 export interface CaptureArtifactContent {
   path: string;
-  content: Uint8Array;
+  content?: Uint8Array;
+  observedSha256?: string;
+  observedSizeBytes?: number;
 }
 
 export const CapturePackageVerificationCodeSchema = z.enum([
@@ -143,10 +145,12 @@ export function verifyPublicationCapturePackage(
       codes.push("artifact_missing");
       continue;
     }
-    if (artifact.content.byteLength !== entry.sizeBytes) {
+    const observedSizeBytes = artifact.observedSizeBytes ?? artifact.content?.byteLength;
+    const observedSha256 = artifact.observedSha256 ?? (artifact.content ? sha256(artifact.content) : undefined);
+    if (observedSizeBytes !== entry.sizeBytes) {
       codes.push("artifact_size_mismatch");
     }
-    if (sha256(artifact.content) !== entry.sha256) {
+    if (observedSha256 !== entry.sha256) {
       codes.push("artifact_hash_mismatch");
     }
   }
