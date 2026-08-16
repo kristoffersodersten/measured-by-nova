@@ -287,7 +287,7 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     return ok(req, { blender: result, viewRegistry });
   });
 
-  register(server, "export_model", "Export the measured project model as blend, GLB, and/or OBJ artifacts.", ExportMeasuredModelSchema, async (input) => {
+  register(server, "export_model", "Export the measured project model as blend, GLB, OBJ, and/or USDZ artifacts.", ExportMeasuredModelSchema, async (input) => {
     const req = requestId();
     const payload = ExportMeasuredModelSchema.parse(input);
     const executionGate = evaluateExecutionIntent(payload.executionIntent, "export-model");
@@ -1216,13 +1216,13 @@ function pngSemanticHash(contents: Buffer): string {
   return hash.digest("hex");
 }
 
-type PortableExportArtifact = { format: "blend" | "glb" | "obj" | "mtl"; path: string };
+type PortableExportArtifact = { format: "blend" | "glb" | "obj" | "mtl" | "usdz"; path: string };
 
-function portableExportPaths(projectId: string, formats: Array<"blend" | "glb" | "obj">, outputBlend: string): PortableExportArtifact[] {
+function portableExportPaths(projectId: string, formats: Array<"blend" | "glb" | "obj" | "usdz">, outputBlend: string): PortableExportArtifact[] {
   const base = path.dirname(outputBlend);
   const requested = new Set(formats);
   requested.add("blend");
-  const artifacts: PortableExportArtifact[] = (["blend", "glb", "obj"] as const)
+  const artifacts: PortableExportArtifact[] = (["blend", "glb", "obj", "usdz"] as const)
     .filter((format) => requested.has(format))
     .map((format) => ({ format, path: format === "blend" ? outputBlend : path.join(base, `${projectId}.${format}`) }));
   if (requested.has("obj")) artifacts.push({ format: "mtl", path: path.join(base, `${projectId}.mtl`) });
@@ -1245,6 +1245,9 @@ async function validatePortableExportArtifact(outputDir: string, artifact: Porta
     throw new Error(`Portable OBJ artifact contains no vertex records: ${artifact.path}`);
   }
   if (artifact.format === "mtl" && !contents.includes(Buffer.from("newmtl "))) throw new Error(`Portable MTL artifact contains no material records: ${artifact.path}`);
+  if (artifact.format === "usdz" && (!contents.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) || !contents.includes(Buffer.from("PXR-USDC")) || !contents.includes(Buffer.from([0x50, 0x4b, 0x05, 0x06])))) {
+    throw new Error(`Portable USDZ artifact is not a complete USD archive: ${artifact.path}`);
+  }
   return { ...artifact, sizeBytes: contents.byteLength, sha256: createHash("sha256").update(contents).digest("hex") };
 }
 

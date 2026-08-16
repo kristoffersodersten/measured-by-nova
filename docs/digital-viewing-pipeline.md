@@ -1062,6 +1062,13 @@ ready without turning the checklist into a new source of truth.
 | Material/condition report | Buyer trust and inspection support. |
 | Manifest | Reproducibility, provenance, confidence, and audit. |
 
+The executable `export_model` path produces USDZ directly through the declared
+Blender runtime from an immutable model-lock snapshot. It reopens the resulting
+USD stage and requires non-empty mesh geometry before the archive is accepted;
+Node-side validation then requires a complete ZIP/USD container and binds its
+size and SHA-256 identity into the execution action evidence. Unsupported,
+partial, corrupt, or pre-existing outputs fail closed and are never replaced.
+
 ## Delivery Package Manifest
 
 Sales-grade digital viewing should ship as a package, not a loose set of files.
