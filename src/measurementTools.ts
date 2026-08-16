@@ -47,6 +47,7 @@ import { evaluateFacadeQaManifest } from "./facadeQa.js";
 import { buildModelLock, hashSourceProject, hashValidationSourceProject, validateModelLock } from "./modelLock.js";
 import { buildOrthographicViewRegistry, validateRequiredViews } from "./viewRegistry.js";
 import { appendRequestLog, fail, ok, readProject, requestId, writeProject } from "./projectStore.js";
+import { writePortableExportEvidence } from "./portableExportEvidence.js";
 import { buildSourceProjectionBlenderJob, buildSourceProjectionManifest, SourceProjectionError, SourceProjectionExecutionReportSchema, SourceProjectionInputSchema } from "./sourceProjection.js";
 import {
   CarportProfileParametersSchema,
@@ -296,7 +297,7 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     }
     const project = materializeProfiles(await readProject(config, payload.projectId));
     const lockValidation = await validateModelLock(config, project);
-    if (!lockValidation.ok || !project.modelLock.modelArtifact) {
+    if (!lockValidation.ok || !project.modelLock.modelArtifact || !project.modelLock.modelHash) {
       return fail(req, "model_lock_invalid", "Portable model export requires the exact unchanged reviewed Blender model.", lockValidation.blocking.map((reason) => `${reason.code}: ${reason.message}`), { blocking: lockValidation.blocking });
     }
     const outputBlend = path.join("measurement-projects", payload.projectId, "artifacts", `${payload.projectId}-export.blend`);
@@ -333,6 +334,22 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
       await Promise.all(artifactPaths.map((artifact) => rm(safeOutputPath(config.outputDir, artifact.path), { force: true })));
       return fail(req, "portable_export_artifact_invalid", error instanceof Error ? error.message : String(error), ["All partial portable-export artifacts were removed."]);
     }
+    let portableExportManifest: string;
+    try {
+      portableExportManifest = await writePortableExportEvidence(config, {
+        schemaVersion: 1,
+        projectId: payload.projectId,
+        sourceBlendPath: project.modelLock.modelArtifact,
+        modelHash: project.modelLock.modelHash,
+        requestedFormats: payload.formats,
+        artifacts,
+        execution: { tool: "export_model", fallbackUsed: false, geometryMutation: false }
+      });
+      await writeProject(config, { ...project, artifacts: { ...project.artifacts, portableExportManifest } });
+    } catch (error) {
+      await Promise.all([...artifactPaths.map((artifact) => rm(safeOutputPath(config.outputDir, artifact.path), { force: true })), rm(safeOutputPath(config.outputDir, path.join("measurement-projects", payload.projectId, "artifacts", "portable-export-manifest.json")), { force: true })]);
+      return fail(req, "portable_export_evidence_failed", error instanceof Error ? error.message : String(error), ["All export artifacts and incomplete evidence were removed so the operation can be retried."]);
+    }
     await appendRequestLog(config, payload.projectId, req, "export_model", { ...payload, sourceBlendPath: project.modelLock.modelArtifact, artifacts });
     const executionAction = buildExecutionActionEvidence(payload.executionIntent, {
       changedArtifacts: artifacts.map((artifact) => artifact.path),
@@ -343,7 +360,7 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
       ],
       manifest: { projectId: payload.projectId, sourceBlendPath: project.modelLock.modelArtifact, modelHash: project.modelLock.modelHash, formats: payload.formats, artifacts }
     });
-    return ok(req, { blender: result, formats: payload.formats, sourceBlendPath: project.modelLock.modelArtifact, artifacts, execution: { intent: payload.executionIntent, action: executionAction } });
+    return ok(req, { blender: result, formats: payload.formats, sourceBlendPath: project.modelLock.modelArtifact, portableExportManifest, artifacts, execution: { intent: payload.executionIntent, action: executionAction } });
   });
 
   register(server, "generate_web_viewer", "Generate an offline integrity-bound browser viewer from the exact current model lock.", GenerateWebViewerSchema, async (input) => {

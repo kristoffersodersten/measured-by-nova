@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { BlenderConfig } from "./contracts.js";
@@ -45,7 +45,12 @@ export async function readProject(config: BlenderConfig, projectId: string): Pro
 export async function writeProject(config: BlenderConfig, project: MeasurementProject): Promise<void> {
   const dir = projectDir(config, project.projectId);
   await mkdir(dir, { recursive: true });
-  await writeFile(projectJsonPath(config, project.projectId), `${JSON.stringify(project, null, 2)}\n`, "utf8");
+  const target = projectJsonPath(config, project.projectId);
+  const temporary = `${target}.tmp-${randomUUID()}`;
+  try {
+    await writeFile(temporary, `${JSON.stringify(project, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    await rename(temporary, target);
+  } catch (error) { await rm(temporary, { force: true }); throw error; }
 }
 
 export async function appendRequestLog(config: BlenderConfig, projectId: string, requestIdValue: string, tool: string, payload: unknown): Promise<void> {
