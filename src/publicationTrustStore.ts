@@ -1,8 +1,8 @@
 import { createHash, createPublicKey, randomUUID, type KeyObject } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdir, opendir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { opendir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
+import { lock } from "proper-lockfile";
 import { z } from "zod";
 import type { BlenderConfig } from "./contracts.js";
 import { safeOutputPath } from "./blenderRunner.js";
@@ -40,7 +40,6 @@ const StoredPublicationTrustSchema = z.object({
   classification: z.object({ category: z.enum(["verified", "partially_verified", "reference", "disputed"]), verifiedScopeIds: z.array(z.string()), unverifiedRequiredScopeIds: z.array(z.string()), disputedScopeIds: z.array(z.string()) }).strict()
 }).strict();
 export type StoredPublicationTrust = z.infer<typeof StoredPublicationTrustSchema>;
-const projectTrustWriteTails = new Map<string, Promise<void>>();
 
 export async function verifyAndStorePublicationTrust(config: BlenderConfig, input: unknown): Promise<StoredPublicationTrust> {
   const payload = VerifyPublicationCaptureInputSchema.parse(input);
@@ -215,65 +214,17 @@ function invalidStoredPublicationTrust(projectId: string): StoredPublicationTrus
   return StoredPublicationTrustSchema.parse({ schemaVersion: 1, projectId, packageManifestPath: "invalid/trust-evidence", packageManifestSha256: "0".repeat(64), disputes: [], verification: { valid: false, codes: ["publication_trust_evidence_invalid"], verifiedBindings: [] }, classification: { category: "disputed", verifiedScopeIds: [], unverifiedRequiredScopeIds: [], disputedScopeIds: ["trust-evidence"] } });
 }
 async function withProjectTrustWriteLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
-  const previous = projectTrustWriteTails.get(key) ?? Promise.resolve();
-  let release = (): void => undefined;
-  const gate = new Promise<void>((resolve) => { release = resolve; });
-  const tail = previous.then(() => gate);
-  projectTrustWriteTails.set(key, tail);
-  await previous;
-  let releaseFileLock: (() => Promise<void>) | undefined;
+  let release: () => Promise<void>;
   try {
-    releaseFileLock = await acquireProjectTrustFileLock(`${key}.lock`);
-    return await operation();
+    release = await lock(key, { realpath: false, stale: 30_000, update: 10_000, retries: { retries: 200, factor: 1, minTimeout: 25, maxTimeout: 25, randomize: false } });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ELOCKED") throw new Error("publication_trust_write_lock_busy");
+    throw error;
   }
-  finally {
-    if (releaseFileLock) await releaseFileLock();
-    release();
-    if (projectTrustWriteTails.get(key) === tail) projectTrustWriteTails.delete(key);
-  }
-}
-async function acquireProjectTrustFileLock(lockPath: string): Promise<() => Promise<void>> {
-  const reclaimPath = `${lockPath}.reclaim`;
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    try { await stat(reclaimPath); await delay(25); continue; } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-    try { await mkdir(lockPath); }
-    catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      if (await lockOwnerIsDead(lockPath)) {
-        let ownsReclaim = false;
-        let reclaimFailure: Error | undefined;
-        try {
-          await mkdir(reclaimPath);
-          ownsReclaim = true;
-          if (await lockOwnerIsDead(lockPath)) await rm(lockPath, { recursive: true, force: true });
-        } catch (reclaimError) {
-          if ((reclaimError as NodeJS.ErrnoException).code !== "EEXIST") reclaimFailure = reclaimError instanceof Error ? reclaimError : new Error("publication_trust_lock_reclaim_failed");
-        }
-        if (ownsReclaim) await rm(reclaimPath, { force: true });
-        if (reclaimFailure) throw reclaimFailure;
-        continue;
-      }
-      await delay(25);
-      continue;
-    }
-    try {
-      await writeFile(path.join(lockPath, "owner.json"), `${JSON.stringify({ pid: process.pid })}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
-      return async () => { await rm(lockPath, { recursive: true, force: true }); };
-    } catch (error) {
-      await rm(lockPath, { recursive: true, force: true });
-      throw error;
-    }
-  }
-  throw new Error("publication_trust_write_lock_busy");
-}
-async function lockOwnerIsDead(lockPath: string): Promise<boolean> {
-  try {
-    const owner = z.object({ pid: z.number().int().positive() }).strict().parse(JSON.parse(await readFile(path.join(lockPath, "owner.json"), "utf8")));
-    try { process.kill(owner.pid, 0); return false; }
-    catch (error) { return (error as NodeJS.ErrnoException).code === "ESRCH"; }
-  } catch {
-    try { return Date.now() - (await stat(lockPath)).mtimeMs > 5_000; }
-    catch { return false; }
-  }
+  let result: T;
+  try { result = await operation(); }
+  catch (error) { await release(); throw error; }
+  await release();
+  return result;
 }
 function trustEvidencePath(config: BlenderConfig, projectId: string): string { return safeOutputPath(config.outputDir, path.join("measurement-projects", projectId, ".publication-trust.json")); }
