@@ -35,7 +35,11 @@ describe("publication trust store", () => {
     expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.verification.codes).toContain("artifact_unexpected");
     await rm(path.join(packageDir, "undeclared.txt"));
     await writeFile(path.join(outputDir, "publication-keys", "revoked-key-ids.json"), JSON.stringify({ schemaVersion: 1, revokedKeyIds: ["native-key-1"] }));
-    await expect(verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, input)).rejects.toThrow("publication_trust_key_revoked");
+    const revoked = await verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, input);
+    expect(revoked.classification.category).toBe("disputed");
+    expect(revoked.verification.codes).toContain("signing_key_revoked");
+    await writeFile(path.join(outputDir, "publication-keys", "native-key-1.pem"), privateKey.export({ type: "pkcs8", format: "pem" }));
+    await expect(verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, input)).rejects.toThrow("publication_trust_private_key_forbidden");
   });
 
   it("keeps manual packages reference even with verified scopes", async () => {

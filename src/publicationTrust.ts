@@ -73,6 +73,7 @@ export const CapturePackageVerificationCodeSchema = z.enum([
   "artifact_hash_mismatch",
   "signed_payload_hash_mismatch",
   "signing_key_unknown",
+  "signing_key_revoked",
   "signature_invalid"
 ]);
 export type CapturePackageVerificationCode = z.infer<typeof CapturePackageVerificationCodeSchema>;

@@ -83,6 +83,7 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
     return { path: relative, content: await readFile(artifactPath) };
   }));
   let publicKey: string | undefined;
+  let keyRevoked = false;
   if (capturePackage.source === "native_app") {
     if (!input.publicKeyPath) throw new Error("publication_trust_public_key_required");
     if (!input.publicKeyPath.startsWith("publication-keys/")) throw new Error("publication_trust_public_key_scope_invalid");
@@ -90,10 +91,14 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
     await assertWithinRoot(safeOutputPath(config.outputDir, "publication-keys"), keyPath);
     if (path.basename(input.publicKeyPath, path.extname(input.publicKeyPath)) !== capturePackage.signature.keyId) throw new Error("publication_trust_key_identity_mismatch");
     publicKey = await readFile(keyPath, "utf8");
+    if (/-----BEGIN (?:ENCRYPTED )?PRIVATE KEY-----/.test(publicKey)) throw new Error("publication_trust_private_key_forbidden");
     try { createPublicKey(publicKey); } catch { throw new Error("publication_trust_public_key_invalid"); }
-    if (await isKeyRevoked(config, capturePackage.signature.keyId)) throw new Error("publication_trust_key_revoked");
+    keyRevoked = await isKeyRevoked(config, capturePackage.signature.keyId);
   }
-  const verification = verifyPublicationCapturePackage(capturePackage, artifacts, (keyId) => capturePackage.source === "native_app" && keyId === capturePackage.signature.keyId ? publicKey : undefined);
+  const evaluatedVerification = verifyPublicationCapturePackage(capturePackage, artifacts, (keyId) => capturePackage.source === "native_app" && !keyRevoked && keyId === capturePackage.signature.keyId ? publicKey : undefined);
+  const verification = keyRevoked
+    ? { ...evaluatedVerification, codes: [...new Set(evaluatedVerification.codes.map((code) => code === "signing_key_unknown" ? "signing_key_revoked" as const : code))] }
+    : evaluatedVerification;
   const classified = classifyPublicTrust({ capturePackage, packageVerification: verification, evidenceScopes: input.evidenceScopes, disputes: input.disputes });
   const classification = capturePackage.source === "native_app" && !verification.valid
     ? { ...classified, category: "disputed" as const, disputedScopeIds: [...new Set([...classified.disputedScopeIds, ...input.evidenceScopes.map((scope) => scope.id)])].sort() }
