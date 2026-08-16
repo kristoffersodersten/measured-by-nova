@@ -1,7 +1,8 @@
 import { createHash, createPublicKey, randomUUID, type KeyObject } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 import type { BlenderConfig } from "./contracts.js";
 import { safeOutputPath } from "./blenderRunner.js";
@@ -43,11 +44,11 @@ const projectTrustWriteTails = new Map<string, Promise<void>>();
 export async function verifyAndStorePublicationTrust(config: BlenderConfig, input: unknown): Promise<StoredPublicationTrust> {
   const payload = VerifyPublicationCaptureInputSchema.parse(input);
   const evidencePath = trustEvidencePath(config, payload.projectId);
+  await assertProjectIdentity(config, payload.projectId);
   return await withProjectTrustWriteLock(evidencePath, async () => {
     const existing = await readStoredPublicationTrust(config, payload.projectId);
     const disputes = [...new Map([...(existing?.disputes ?? []), ...payload.disputes].map((dispute) => [dispute.scopeId, dispute])).values()];
     const evaluated = await evaluatePublicationTrust(config, { ...payload, disputes });
-    await assertProjectIdentity(config, payload.projectId);
     const temporary = `${evidencePath}.tmp-${randomUUID()}`;
     try {
       await writeFile(temporary, `${JSON.stringify(evaluated, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
@@ -87,6 +88,8 @@ type PublicationTrustEvaluationInput = Pick<z.infer<typeof VerifyPublicationCapt
 
 async function evaluatePublicationTrust(config: BlenderConfig, input: PublicationTrustEvaluationInput): Promise<StoredPublicationTrust> {
   const manifestPath = safeOutputPath(config.outputDir, input.packageManifestPath);
+  const packageRoot = input.packageManifestPath.split("/")[0];
+  if (!packageRoot || ["measurement-projects", "publication-keys", "release", "evidence"].includes(packageRoot)) throw new Error("publication_trust_package_root_reserved");
   await assertWithinRoot(config.outputDir, manifestPath);
   const manifestBytes = await readFile(manifestPath);
   const capturePackage = PublicationCapturePackageSchema.parse(JSON.parse(manifestBytes.toString("utf8")));
@@ -183,10 +186,39 @@ async function withProjectTrustWriteLock<T>(key: string, operation: () => Promis
   const tail = previous.then(() => gate);
   projectTrustWriteTails.set(key, tail);
   await previous;
-  try { return await operation(); }
+  let releaseFileLock: (() => Promise<void>) | undefined;
+  try {
+    releaseFileLock = await acquireProjectTrustFileLock(`${key}.lock`);
+    return await operation();
+  }
   finally {
+    if (releaseFileLock) await releaseFileLock();
     release();
     if (projectTrustWriteTails.get(key) === tail) projectTrustWriteTails.delete(key);
+  }
+}
+async function acquireProjectTrustFileLock(lockPath: string): Promise<() => Promise<void>> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    try {
+      await mkdir(lockPath);
+      await writeFile(path.join(lockPath, "owner.json"), `${JSON.stringify({ pid: process.pid })}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
+      return async () => { await rm(lockPath, { recursive: true, force: true }); };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") { await rm(lockPath, { recursive: true, force: true }); throw error; }
+      if (await lockOwnerIsDead(lockPath)) { await rm(lockPath, { recursive: true, force: true }); continue; }
+      await delay(25);
+    }
+  }
+  throw new Error("publication_trust_write_lock_busy");
+}
+async function lockOwnerIsDead(lockPath: string): Promise<boolean> {
+  try {
+    const owner = z.object({ pid: z.number().int().positive() }).strict().parse(JSON.parse(await readFile(path.join(lockPath, "owner.json"), "utf8")));
+    try { process.kill(owner.pid, 0); return false; }
+    catch (error) { return (error as NodeJS.ErrnoException).code === "ESRCH"; }
+  } catch {
+    try { return Date.now() - (await stat(lockPath)).mtimeMs > 5_000; }
+    catch { return false; }
   }
 }
 function trustEvidencePath(config: BlenderConfig, projectId: string): string { return safeOutputPath(config.outputDir, path.join("measurement-projects", projectId, ".publication-trust.json")); }

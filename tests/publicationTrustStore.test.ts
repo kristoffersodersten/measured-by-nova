@@ -79,5 +79,6 @@ describe("publication trust store", () => {
     expect(result.verification.codes).toContain("manual_upload");
     await writeFile(path.join(packageDir, "evidence.json"), "changed manual evidence");
     expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.classification.category).toBe("disputed");
+    await expect(verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { projectId, executionIntent: intent, packageManifestPath: `measurement-projects/${projectId}/capture-package.json` })).rejects.toThrow("publication_trust_package_root_reserved");
   });
 });
