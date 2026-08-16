@@ -91,12 +91,14 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
   const packageRoot = path.normalize(input.packageManifestPath).split(path.sep)[0];
   if (!packageRoot || ["measurement-projects", "publication-keys", "release", "evidence"].includes(packageRoot)) throw new Error("publication_trust_package_root_reserved");
   await assertWithinRoot(config.outputDir, manifestPath);
+  if ((await stat(manifestPath)).size > 4 * 1024 * 1024) throw new Error("publication_trust_manifest_too_large");
   const manifestBytes = await readFile(manifestPath);
   const capturePackage = PublicationCapturePackageSchema.parse(JSON.parse(manifestBytes.toString("utf8")));
   if (capturePackage.binding.projectId !== input.projectId) throw new Error("publication_trust_project_mismatch");
   const packageDirectory = path.dirname(manifestPath);
   await assertDedicatedPackageDirectory(config.outputDir, packageDirectory, manifestPath);
   const actual = (await listFiles(packageDirectory)).filter((entry) => entry !== path.basename(manifestPath));
+  if (actual.length > 10_000) throw new Error("publication_trust_artifact_count_exceeded");
   const artifacts: CaptureArtifactContent[] = [];
   for (const relative of actual.sort()) {
     const artifactPath = path.join(packageDirectory, relative);
@@ -115,6 +117,7 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
     const keyPath = safeOutputPath(config.outputDir, input.publicKeyPath);
     await assertDirectSubdirectory(config.outputDir, keyRoot);
     await assertWithinRoot(keyRoot, keyPath);
+    if ((await stat(keyPath)).size > 64 * 1024) throw new Error("publication_trust_public_key_too_large");
     if (path.basename(input.publicKeyPath, path.extname(input.publicKeyPath)) !== capturePackage.signature.keyId) throw new Error("publication_trust_key_identity_mismatch");
     const keyPem = await readFile(keyPath, "utf8");
     if (/-----BEGIN [^-]*PRIVATE KEY-----/.test(keyPem)) throw new Error("publication_trust_private_key_forbidden");

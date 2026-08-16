@@ -29,8 +29,8 @@ const CapturePackageBindingSchema = z.object({
   kitId: IdSchema,
   commissioningPartyId: IdSchema,
   capturedAt: z.string().datetime({ offset: true }),
-  evidenceScopes: z.array(PublicationEvidenceScopeSchema).min(1),
-  manifest: z.array(CaptureArtifactManifestEntrySchema).min(1)
+  evidenceScopes: z.array(PublicationEvidenceScopeSchema).min(1).max(10_000),
+  manifest: z.array(CaptureArtifactManifestEntrySchema).min(1).max(10_000)
 }).strict().superRefine((value, context) => {
   const paths = new Set<string>();
   for (const entry of value.manifest) {
