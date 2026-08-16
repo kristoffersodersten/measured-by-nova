@@ -86,9 +86,13 @@ describe("publication trust store", () => {
     expect(result.verification.codes).toContain("manual_upload");
     await writeFile(path.join(packageDir, "evidence.json"), "changed manual evidence");
     expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.classification.category).toBe("disputed");
+    await writeFile(path.join(packageDir, "capture-package.json"), JSON.stringify({ source: "manual_upload", binding: { ...binding, manifest: [{ ...binding.manifest[0], sizeBytes: 2 * 1024 * 1024 * 1024 + 1 }] } }));
+    await expect(verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { projectId, executionIntent: intent, packageManifestPath: "captures/manual-1/capture-package.json" })).rejects.toThrow("publication_trust_package_bytes_exceeded");
     await expect(verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { projectId, executionIntent: intent, packageManifestPath: `measurement-projects/${projectId}/capture-package.json` })).rejects.toThrow("publication_trust_package_root_reserved");
     await expect(verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { projectId, executionIntent: intent, packageManifestPath: `./measurement-projects/${projectId}/capture-package.json` })).rejects.toThrow("publication_trust_package_root_reserved");
     const trustPath = path.join(outputDir, "measurement-projects", projectId, ".publication-trust.json");
+    await writeFile(trustPath, JSON.stringify({ ...result, projectId: "different-project" }));
+    expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.classification.category).toBe("disputed");
     await writeFile(trustPath, "{");
     expect(await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId)).toMatchObject({ verification: { valid: false, codes: ["publication_trust_evidence_invalid"] }, classification: { category: "disputed", verifiedScopeIds: [] } });
     await rm(trustPath);

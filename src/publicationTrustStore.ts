@@ -20,6 +20,7 @@ const RevokedKeyRegistrySchema = z.object({
   schemaVersion: z.literal(1),
   revokedKeyIds: z.array(z.string().min(1).max(120).regex(/^[A-Za-z0-9_.-]+$/))
 }).strict();
+const MaxCapturePackageBytes = 2 * 1024 * 1024 * 1024;
 export const VerifyPublicationCaptureInputSchema = z.object({
   projectId: z.string().min(1).max(120).regex(/^[A-Za-z0-9_.-]+$/),
   executionIntent: ExecutionIntentSchema,
@@ -65,7 +66,7 @@ export async function readLivePublicationTrust(config: BlenderConfig, projectId:
   let stored: StoredPublicationTrust | null;
   try { stored = await readStoredPublicationTrust(config, projectId); }
   catch (error) {
-    if (error instanceof Error && error.message === "publication_trust_evidence_invalid") return invalidStoredPublicationTrust(projectId);
+    if (error instanceof Error && ["publication_trust_evidence_invalid", "publication_trust_project_mismatch"].includes(error.message)) return invalidStoredPublicationTrust(projectId);
     throw error;
   }
   if (!stored) return null;
@@ -99,10 +100,16 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
   if ((await stat(manifestPath)).size > 4 * 1024 * 1024) throw new Error("publication_trust_manifest_too_large");
   const manifestBytes = await readFile(manifestPath);
   const capturePackage = PublicationCapturePackageSchema.parse(JSON.parse(manifestBytes.toString("utf8")));
+  if (capturePackage.binding.manifest.reduce((total, entry) => total + entry.sizeBytes, 0) > MaxCapturePackageBytes) throw new Error("publication_trust_package_bytes_exceeded");
   if (capturePackage.binding.projectId !== input.projectId) throw new Error("publication_trust_project_mismatch");
   const packageDirectory = path.dirname(manifestPath);
   await assertDedicatedPackageDirectory(config.outputDir, packageDirectory, manifestPath);
   const actual = (await listFiles(packageDirectory)).filter((entry) => entry !== path.basename(manifestPath));
+  let actualPackageBytes = 0;
+  for (const relative of actual) {
+    actualPackageBytes += (await stat(path.join(packageDirectory, relative))).size;
+    if (actualPackageBytes > MaxCapturePackageBytes) throw new Error("publication_trust_package_bytes_exceeded");
+  }
   const artifacts: CaptureArtifactContent[] = [];
   for (const relative of actual.sort()) {
     const artifactPath = path.join(packageDirectory, relative);
@@ -226,15 +233,34 @@ async function withProjectTrustWriteLock<T>(key: string, operation: () => Promis
   }
 }
 async function acquireProjectTrustFileLock(lockPath: string): Promise<() => Promise<void>> {
+  const reclaimPath = `${lockPath}.reclaim`;
   for (let attempt = 0; attempt < 200; attempt += 1) {
+    try { await stat(reclaimPath); await delay(25); continue; } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    try { await mkdir(lockPath); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      if (await lockOwnerIsDead(lockPath)) {
+        let ownsReclaim = false;
+        try {
+          await mkdir(reclaimPath);
+          ownsReclaim = true;
+          if (await lockOwnerIsDead(lockPath)) await rm(lockPath, { recursive: true, force: true });
+        } catch (reclaimError) {
+          if ((reclaimError as NodeJS.ErrnoException).code !== "EEXIST") throw reclaimError;
+        } finally {
+          if (ownsReclaim) try { await rm(reclaimPath); } catch (releaseError) { if ((releaseError as NodeJS.ErrnoException).code !== "ENOENT") throw releaseError; }
+        }
+        continue;
+      }
+      await delay(25);
+      continue;
+    }
     try {
-      await mkdir(lockPath);
       await writeFile(path.join(lockPath, "owner.json"), `${JSON.stringify({ pid: process.pid })}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
       return async () => { await rm(lockPath, { recursive: true, force: true }); };
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") { await rm(lockPath, { recursive: true, force: true }); throw error; }
-      if (await lockOwnerIsDead(lockPath)) { await rm(lockPath, { recursive: true, force: true }); continue; }
-      await delay(25);
+      await rm(lockPath, { recursive: true, force: true });
+      throw error;
     }
   }
   throw new Error("publication_trust_write_lock_busy");

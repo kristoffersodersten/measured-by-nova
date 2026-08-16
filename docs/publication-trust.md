@@ -23,6 +23,11 @@ customer workspace revalidates the package, artifacts, key, and signature on
 every read. Later byte drift is therefore rendered as `Disputed`, not as stale
 verified evidence.
 
+Intake and live revalidation stream artifact hashes with bounded traversal and
+reject packages whose declared or observed aggregate artifact size exceeds
+2 GiB. This is an explicit synchronous customer-workspace I/O budget, not a
+fallback; larger evidence sets require a separately scoped ingestion contract.
+
 Approved public keys are rotated by installing a new
 `publication-keys/<keyId>.pem` and having the native app sign new packages with
 that identity. To revoke a key, atomically write
