@@ -1,6 +1,6 @@
-import { createHash, createPublicKey, type KeyObject } from "node:crypto";
+import { createHash, createPublicKey, randomUUID, type KeyObject } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { readFile, readdir, realpath, rename, stat, writeFile } from "node:fs/promises";
+import { readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import type { BlenderConfig } from "./contracts.js";
@@ -46,9 +46,14 @@ export async function verifyAndStorePublicationTrust(config: BlenderConfig, inpu
   const evaluated = await evaluatePublicationTrust(config, { ...payload, disputes });
   const evidencePath = trustEvidencePath(config, payload.projectId);
   await assertProjectIdentity(config, payload.projectId);
-  const temporary = `${evidencePath}.tmp-${process.pid}`;
-  await writeFile(temporary, `${JSON.stringify(evaluated, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
-  await rename(temporary, evidencePath);
+  const temporary = `${evidencePath}.tmp-${randomUUID()}`;
+  try {
+    await writeFile(temporary, `${JSON.stringify(evaluated, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    await rename(temporary, evidencePath);
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
   return evaluated;
 }
 
@@ -157,7 +162,15 @@ async function isKeyRevoked(config: BlenderConfig, keyId: string): Promise<boole
   }
 }
 async function readStoredPublicationTrust(config: BlenderConfig, projectId: string): Promise<StoredPublicationTrust | null> {
-  try { return StoredPublicationTrustSchema.parse(JSON.parse(await readFile(trustEvidencePath(config, projectId), "utf8"))); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw new Error("publication_trust_evidence_invalid"); }
+  try {
+    const stored = StoredPublicationTrustSchema.parse(JSON.parse(await readFile(trustEvidencePath(config, projectId), "utf8")));
+    if (stored.projectId !== projectId) throw new Error("publication_trust_project_mismatch");
+    return stored;
+  }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if (error instanceof Error && error.message === "publication_trust_project_mismatch") throw error;
+    throw new Error("publication_trust_evidence_invalid");
+  }
 }
 function trustEvidencePath(config: BlenderConfig, projectId: string): string { return safeOutputPath(config.outputDir, path.join("measurement-projects", projectId, ".publication-trust.json")); }
