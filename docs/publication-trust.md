@@ -8,8 +8,10 @@ Neither an administrator nor an LLM may assign or upgrade a category directly.
 `Measured Verified` requires a native-app package with an Ed25519 signature. The
 signed payload binds the package to its project, object, capture protocol, kit,
 commissioning party, capture time, and complete artifact manifest. Verification
-fails closed for missing or unexpected artifacts, changed bytes, unknown or
-revoked signing keys, payload drift, or an invalid signature.
+also binds every measurement, material-source, and known-deviation scope and its
+verified/required state; intake callers cannot supply or upgrade these claims.
+Verification fails closed for missing or unexpected artifacts, changed bytes,
+unknown or revoked signing keys, payload drift, or an invalid signature.
 
 The executable intake is `verify_publication_capture_package`. It accepts only
 an explicit execution intent, a project-bound package manifest, declared

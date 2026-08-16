@@ -9,7 +9,6 @@ import {
   classifyPublicTrust,
   PublicationCapturePackageSchema,
   PublicationDisputeSchema,
-  PublicationEvidenceScopeSchema,
   verifyPublicationCapturePackage
 } from "./publicationTrust.js";
 
@@ -23,7 +22,6 @@ export const VerifyPublicationCaptureInputSchema = z.object({
   executionIntent: ExecutionIntentSchema,
   packageManifestPath: RelativePathSchema,
   publicKeyPath: RelativePathSchema.optional(),
-  evidenceScopes: z.array(PublicationEvidenceScopeSchema).min(1),
   disputes: z.array(PublicationDisputeSchema).default([])
 }).strict();
 
@@ -33,7 +31,6 @@ const StoredPublicationTrustSchema = z.object({
   packageManifestPath: RelativePathSchema,
   publicKeyPath: RelativePathSchema.optional(),
   packageManifestSha256: z.string().length(64),
-  evidenceScopes: z.array(PublicationEvidenceScopeSchema),
   disputes: z.array(PublicationDisputeSchema),
   verification: z.object({ valid: z.boolean(), codes: z.array(z.string()), verifiedBindings: z.array(z.string()) }).strict(),
   classification: z.object({ category: z.enum(["verified", "partially_verified", "reference", "disputed"]), verifiedScopeIds: z.array(z.string()), unverifiedRequiredScopeIds: z.array(z.string()), disputedScopeIds: z.array(z.string()) }).strict()
@@ -61,13 +58,16 @@ export async function readLivePublicationTrust(config: BlenderConfig, projectId:
   catch {
     return StoredPublicationTrustSchema.parse({ ...stored, verification: { valid: false, codes: ["artifact_missing"], verifiedBindings: [] }, classification: { ...stored.classification, category: "disputed", disputedScopeIds: [...new Set([...stored.classification.disputedScopeIds, ...stored.classification.verifiedScopeIds])].sort() } });
   }
+  if (live.packageManifestSha256 !== stored.packageManifestSha256) {
+    return StoredPublicationTrustSchema.parse({ ...live, verification: { ...live.verification, valid: false, codes: [...new Set([...live.verification.codes, "signed_payload_hash_mismatch"])] }, classification: { ...live.classification, category: "disputed", disputedScopeIds: [...new Set([...live.classification.disputedScopeIds, ...stored.classification.verifiedScopeIds])].sort() } });
+  }
   if (["verified", "partially_verified"].includes(stored.classification.category) && !live.verification.valid) {
     return StoredPublicationTrustSchema.parse({ ...live, classification: { ...live.classification, category: "disputed", disputedScopeIds: [...new Set([...live.classification.disputedScopeIds, ...stored.classification.verifiedScopeIds])].sort() } });
   }
   return live;
 }
 
-type PublicationTrustEvaluationInput = Pick<z.infer<typeof VerifyPublicationCaptureInputSchema>, "projectId" | "packageManifestPath" | "publicKeyPath" | "evidenceScopes" | "disputes">;
+type PublicationTrustEvaluationInput = Pick<z.infer<typeof VerifyPublicationCaptureInputSchema>, "projectId" | "packageManifestPath" | "publicKeyPath" | "disputes">;
 
 async function evaluatePublicationTrust(config: BlenderConfig, input: PublicationTrustEvaluationInput): Promise<StoredPublicationTrust> {
   const manifestPath = safeOutputPath(config.outputDir, input.packageManifestPath);
@@ -99,11 +99,11 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
   const verification = keyRevoked
     ? { ...evaluatedVerification, codes: [...new Set(evaluatedVerification.codes.map((code) => code === "signing_key_unknown" ? "signing_key_revoked" as const : code))] }
     : evaluatedVerification;
-  const classified = classifyPublicTrust({ capturePackage, packageVerification: verification, evidenceScopes: input.evidenceScopes, disputes: input.disputes });
+  const classified = classifyPublicTrust({ capturePackage, packageVerification: verification, disputes: input.disputes });
   const classification = capturePackage.source === "native_app" && !verification.valid
-    ? { ...classified, category: "disputed" as const, disputedScopeIds: [...new Set([...classified.disputedScopeIds, ...input.evidenceScopes.map((scope) => scope.id)])].sort() }
+    ? { ...classified, category: "disputed" as const, disputedScopeIds: [...new Set([...classified.disputedScopeIds, ...capturePackage.binding.evidenceScopes.map((scope) => scope.id)])].sort() }
     : classified;
-  return StoredPublicationTrustSchema.parse({ schemaVersion: 1, projectId: input.projectId, packageManifestPath: input.packageManifestPath, ...(input.publicKeyPath ? { publicKeyPath: input.publicKeyPath } : {}), packageManifestSha256: createHash("sha256").update(manifestBytes).digest("hex"), evidenceScopes: input.evidenceScopes, disputes: input.disputes, verification, classification });
+  return StoredPublicationTrustSchema.parse({ schemaVersion: 1, projectId: input.projectId, packageManifestPath: input.packageManifestPath, ...(input.publicKeyPath ? { publicKeyPath: input.publicKeyPath } : {}), packageManifestSha256: createHash("sha256").update(manifestBytes).digest("hex"), disputes: input.disputes, verification, classification });
 }
 
 async function listFiles(root: string, prefix = ""): Promise<string[]> {

@@ -65,7 +65,7 @@ try {
     await client.connect(transport);
     const listed = await client.listTools();
     tools = listed.tools.map((tool) => tool.name).sort();
-    if (!["create_measurement_project", "render_digital_viewing_preview", "align_and_project_source_photo", "generate_web_viewer"].every((tool) => tools.includes(tool))) {
+    if (!["create_measurement_project", "render_digital_viewing_preview", "align_and_project_source_photo", "generate_web_viewer", "verify_publication_capture_package"].every((tool) => tools.includes(tool))) {
       throw new Error("release_mcp_tools_missing");
     }
   } finally {
