@@ -8,6 +8,7 @@ import { MeasurementProjectSchema } from "./measurementContracts.js";
 import { DigitalViewingRenderManifestSchema } from "./digitalViewingContracts.js";
 import { buildExecutableWorkspace, type UiRuntimeConfig } from "./uiWorkspace.js";
 import { readLivePublicationTrust } from "./publicationTrustStore.js";
+import { readLivePortableExportEvidence } from "./portableExportEvidence.js";
 
 export type UiOperatorDecision = { decision: "hold"; actor: "operator"; projectId: string } | null;
 
@@ -31,17 +32,25 @@ export async function loadUiProjectWorkspace(config: UiRuntimeConfig, projectId:
   const captureReady = project.photos.length > 0 && (project.dimensions.length > 0 || project.profiles.length > 0);
   const validationPassed = captureReady && project.validation.ok && project.validation.checks.length > 0 && project.validation.sourceProjectHash === hashValidationSourceProject(project);
   const previewEvidence = await validatedPreviewEvidence(config, project.projectId, project.artifacts.digitalViewingRenderManifest, project.artifacts.digitalViewingPreview);
+  const portableExport = await readLivePortableExportEvidence(asBlenderConfig(config), project);
+  const captureTrusted = captureReady && trust !== null && trust.classification.category !== "disputed";
+  const deliveryBlockingReason = !captureTrusted
+    ? trust?.classification.category === "disputed" ? "capture_trust_disputed" : "capture_trust_incomplete"
+    : !validationPassed ? "project_validation_not_passing"
+    : !lock.ok ? "model_lock_invalid"
+    : portableExport.status === "blocked" ? portableExport.code
+    : undefined;
   const surface = buildExecutableWorkspace(config);
   surface.panels[0].states = [
     { id: "capture", label: captureReady ? captureTrustLabel(projectId, trust?.classification) : `Capture evidence incomplete for ${projectId}`, topology: "system", status: captureReady && trust !== null && trust.classification.category !== "disputed" ? "ready" : "blocked", provenance: trust ? `measurement-projects/${projectId}/.publication-trust.json` : `measurement-projects/${projectId}/project.json`, ...(captureReady && trust !== null && trust.classification.category !== "disputed" ? {} : { blockingReason: trust?.classification.category === "disputed" ? "Live capture package evidence no longer matches its verified trust record." : captureReady ? "Verify an explicit native or manual capture package before publication." : "At least one photo and one measurement or profile are required." }), operatorApprovalRequired: false },
     { id: "validation", label: validationPassed ? "Project validation passed" : "Project validation not passing", topology: "execution", status: validationPassed ? "ready" : "blocked", provenance: "project.validation", ...(validationPassed ? {} : { blockingReason: "Complete capture evidence, then run and pass declared project validation before delivery." }), operatorApprovalRequired: false }
   ];
   surface.panels[1].states = [
-    { id: "infrastructure", label: `${config.environmentTruth.engine} configured via ${config.environmentTruth.provider}`, topology: "infrastructure", status: "ready", provenance: config.environmentTruth.endpoint, operatorApprovalRequired: false },
+    { id: "portable-delivery", label: portableExport.status === "ready" ? `Blender delivery verified · ${portableExport.evidence.requestedFormats.join(", ")}` : "Blender delivery not verified", topology: "infrastructure", status: deliveryBlockingReason ? "blocked" : portableExport.status === "ready" ? "ready" : "pending", provenance: project.artifacts.portableExportManifest ?? "portable-export-manifest", ...(deliveryBlockingReason ? { blockingReason: deliveryBlockingReason } : {}), operatorApprovalRequired: false },
     { id: "model-lock", label: lock.ok ? "Reviewed model lock verified" : "Reviewed model lock invalid", topology: "human-intervention", status: lock.ok ? "ready" : "blocked", provenance: project.modelLock.modelArtifact ?? "model-lock-contract", ...(lock.ok ? {} : { blockingReason: lock.blocking.map((reason) => reason.code).join(", ") }), operatorApprovalRequired: true }
   ];
-  surface.panels[2].states = [{ id: "preview", label: surface.outputTruth.previewLabel, topology: "execution", status: previewEvidence ? "ready" : "pending", confidence: "medium", provenance: previewEvidence ? "validated-render-manifest" : "preview-render-manifest", operatorApprovalRequired: false }];
-  return { surface, operatorDecision: await readDecision(config, projectId), project: { projectId, modelLockValid: lock.ok, validationPassed, captureReady, publicationTrust: trust?.classification ?? null } };
+  surface.panels[2].states = [{ id: "preview", label: surface.outputTruth.previewLabel, topology: "system", status: previewEvidence ? "ready" : "pending", ...(previewEvidence ? { confidence: "medium" as const } : {}), provenance: previewEvidence ? "validated-render-manifest" : "preview-render-manifest", operatorApprovalRequired: false }];
+  return { surface, operatorDecision: await readDecision(config, projectId), project: { projectId, modelLockValid: lock.ok, validationPassed, captureReady, publicationTrust: trust?.classification ?? null, portableExport: portableExport.status } };
 }
 
 function displayTrustCategory(category: string): string { return category.split("_").map((part) => part[0]?.toUpperCase() + part.slice(1)).join(" "); }

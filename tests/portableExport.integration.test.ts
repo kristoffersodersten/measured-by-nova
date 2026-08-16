@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -7,6 +8,7 @@ import { runBlenderJob } from "../src/blenderRunner.js";
 import { registerMeasurementTools } from "../src/measurementTools.js";
 import { MeasurementProjectSchema } from "../src/measurementContracts.js";
 import { buildModelLock } from "../src/modelLock.js";
+import { readLivePortableExportEvidence } from "../src/portableExportEvidence.js";
 
 type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
 
@@ -34,7 +36,7 @@ describe("locked portable export Blender runtime", () => {
     const server = { tool(name: string, _description: string, _shape: unknown, handler: (input: unknown) => Promise<ToolResult>) { tools.set(name, handler); } } as unknown as McpServer;
     registerMeasurementTools(server, config);
     const result = await tools.get("export_model")!({ projectId, formats: ["glb", "obj", "usdz"], executionIntent: exportIntent() });
-    const body = JSON.parse(result.content[0].text) as { data: { sourceBlendPath: string; artifacts: Array<{ format: string; path: string; sizeBytes: number; sha256: string }> } };
+    const body = JSON.parse(result.content[0].text) as { data: { sourceBlendPath: string; portableExportManifest: string; artifacts: Array<{ format: string; path: string; sizeBytes: number; sha256: string }> } };
     expect(result.isError, result.content[0].text).toBe(false);
     expect(body.data.sourceBlendPath).toBe(sourceBlendPath);
     expect(body.data.artifacts.map((artifact) => artifact.format)).toEqual(["blend", "glb", "obj", "usdz", "mtl"]);
@@ -44,6 +46,24 @@ describe("locked portable export Blender runtime", () => {
     const usdz = await readFile(path.join(outputDir, body.data.artifacts.find((artifact) => artifact.format === "usdz")!.path));
     expect(usdz.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
     expect(usdz.includes(Buffer.from("PXR-USDC")) || usdz.includes(Buffer.from("#usda"))).toBe(true);
+    const persisted = MeasurementProjectSchema.parse(JSON.parse(await readFile(path.join(projectDir, "project.json"), "utf8")) as unknown);
+    expect(persisted.artifacts.portableExportManifest).toBe(body.data.portableExportManifest);
+    expect(await readLivePortableExportEvidence(config, persisted)).toMatchObject({ status: "ready", evidence: { projectId, modelHash: modelLock.modelHash } });
+    const manifestPath = path.join(outputDir, body.data.portableExportManifest);
+    const originalManifest = await readFile(manifestPath);
+    const exportedBlendPath = path.join(outputDir, body.data.artifacts.find((artifact) => artifact.format === "blend")!.path);
+    const originalExportedBlend = await readFile(exportedBlendPath);
+    const forgedBlend = Buffer.from("forged-but-self-consistent-export");
+    const forgedManifest = JSON.parse(originalManifest.toString("utf8")) as { artifacts: Array<{ format: string; sizeBytes: number; sha256: string }> };
+    const forgedBlendEntry = forgedManifest.artifacts.find((artifact) => artifact.format === "blend")!;
+    forgedBlendEntry.sizeBytes = forgedBlend.byteLength; forgedBlendEntry.sha256 = createHash("sha256").update(forgedBlend).digest("hex");
+    await writeFile(exportedBlendPath, forgedBlend); await writeFile(manifestPath, JSON.stringify(forgedManifest));
+    expect(await readLivePortableExportEvidence(config, persisted)).toEqual({ status: "blocked", code: "portable_export_blend_model_lock_mismatch" });
+    await writeFile(exportedBlendPath, originalExportedBlend); await writeFile(manifestPath, originalManifest);
+    const glbPath = path.join(outputDir, body.data.artifacts.find((artifact) => artifact.format === "glb")!.path);
+    const replacement = path.join(projectDir, "artifacts", "replacement.glb");
+    await copyFile(glbPath, replacement); await rm(glbPath); await symlink(replacement, glbPath);
+    expect(await readLivePortableExportEvidence(config, persisted)).toEqual({ status: "blocked", code: "portable_export_artifact_path_invalid" });
 
     await writeFile(path.join(outputDir, sourceBlendPath), "tampered");
     const drifted = await tools.get("export_model")!({ projectId, formats: ["glb"], executionIntent: exportIntent() });

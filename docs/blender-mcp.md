@@ -131,6 +131,18 @@ Every new project carries this source-of-truth policy:
 | `generate_digital_viewing_asset_bundle_manifest` | Generates a deterministic pre-render file-readiness manifest for required photo, texture, and expected render assets without starting Blender. |
 | `generate_digital_viewing_delivery_package` | Generates a deterministic delivery-package manifest that indexes validated render, material authoring, report artifacts, and explicitly requested customer delivery targets. |
 
+`export_model` persists an integrity-bound `portable-export-manifest.json` and
+atomically records its relative path in `project.json`. The manifest binds the
+requested formats and every produced artifact to the exact reviewed model-lock
+path and SHA-256. Consumers must use live revalidation rather than treating the
+tool response as durable delivery truth. Revalidation rejects artifact drift,
+missing or duplicate formats, symlinks, path escape, malformed evidence, and
+files replaced while hashing. Evidence persistence failure removes the complete
+new export set and manifest, leaving the operation explicitly retryable.
+Duplicate requested formats fail schema validation before Blender starts, and
+the exported BLEND hash must equal the reviewed model-lock hash even if a
+manifest and artifact are replaced together.
+
 The digital-viewing preset tools are intake gates. They describe and validate
 what photos, measurements, material records, texture evidence, and condition
 evidence are required for a delivery tier. Premium presets may also require

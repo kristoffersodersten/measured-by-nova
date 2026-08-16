@@ -241,7 +241,7 @@ export const CreateParametricProfileSchema = ToolEnvelopeSchema.extend({ profile
 export const GenerateMeasuredModelSchema = ToolEnvelopeSchema.extend({ outputBlend: RelativePathSchema.optional() }).strict();
 export const ValidateModelSchema = ToolEnvelopeSchema.extend({ checks: z.array(z.enum(["known_dimensions", "photo_orientation", "reprojection_error"])).min(1) }).strict();
 export const GenerateElevationViewsSchema = ToolEnvelopeSchema.extend({ views: z.array(z.enum(["plan", "north", "south", "east", "west", "section_a_a"])).min(1) }).strict();
-export const ExportMeasuredModelSchema = ToolEnvelopeSchema.extend({ executionIntent: ExecutionIntentSchema, formats: z.array(z.enum(["blend", "glb", "obj", "usdz"])).min(1) }).strict();
+export const ExportMeasuredModelSchema = ToolEnvelopeSchema.extend({ executionIntent: ExecutionIntentSchema, formats: z.array(z.enum(["blend", "glb", "obj", "usdz"])).min(1).max(4).refine((formats) => new Set(formats).size === formats.length, "Portable export formats must be unique.") }).strict();
 export const GenerateWebViewerSchema = ToolEnvelopeSchema.extend({
   executionIntent: ExecutionIntentSchema,
   outputDir: RelativePathSchema.optional()

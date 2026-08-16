@@ -78,6 +78,9 @@ describe("executable Measured workspace", () => {
     const workspace = await (await fetch(`${origin}/api/workspace?projectId=observed-project`)).json() as { project: object; surface: { panels: Array<{ states: Array<{ status: string; blockingReason?: string }> }> } };
     expect(workspace.project).toMatchObject({ projectId: "observed-project", captureReady: false, validationPassed: false, modelLockValid: false });
     expect(workspace.surface.panels[0]?.states[0]).toMatchObject({ status: "blocked", blockingReason: "At least one photo and one measurement or profile are required." });
+    expect(workspace.surface.panels.flatMap((panel) => panel.states)).toHaveLength(5);
+    expect(workspace.surface.panels[1]?.states[0]).toMatchObject({ id: "portable-delivery", topology: "infrastructure", status: "blocked", blockingReason: "capture_trust_incomplete" });
+    expect(workspace.surface.panels[2]?.states[0]).toMatchObject({ id: "preview", label: "Photorealistic preview - not verified truth", status: "pending" });
     expect((await fetch(`${origin}/api/workspace?projectId=escaped`)).status).toBe(404);
   });
 
