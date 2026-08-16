@@ -33,7 +33,7 @@ export async function loadUiProjectWorkspace(config: UiRuntimeConfig, projectId:
   const previewEvidence = await validatedPreviewEvidence(config, project.projectId, project.artifacts.digitalViewingRenderManifest, project.artifacts.digitalViewingPreview);
   const surface = buildExecutableWorkspace(config);
   surface.panels[0].states = [
-    { id: "capture", label: captureReady ? `Capture ${displayTrustCategory(trust?.classification.category ?? "reference")} for ${projectId}` : `Capture evidence incomplete for ${projectId}`, topology: "system", status: captureReady && trust?.classification.category !== "disputed" ? "ready" : "blocked", provenance: trust ? `measurement-projects/${projectId}/.publication-trust.json` : `measurement-projects/${projectId}/project.json`, ...(captureReady && trust?.classification.category !== "disputed" ? {} : { blockingReason: trust?.classification.category === "disputed" ? "Live capture package evidence no longer matches its verified trust record." : "At least one photo and one measurement or profile are required." }), operatorApprovalRequired: false },
+    { id: "capture", label: captureReady ? captureTrustLabel(projectId, trust?.classification) : `Capture evidence incomplete for ${projectId}`, topology: "system", status: captureReady && trust?.classification.category !== "disputed" ? "ready" : "blocked", provenance: trust ? `measurement-projects/${projectId}/.publication-trust.json` : `measurement-projects/${projectId}/project.json`, ...(captureReady && trust?.classification.category !== "disputed" ? {} : { blockingReason: trust?.classification.category === "disputed" ? "Live capture package evidence no longer matches its verified trust record." : "At least one photo and one measurement or profile are required." }), operatorApprovalRequired: false },
     { id: "validation", label: validationPassed ? "Project validation passed" : "Project validation not passing", topology: "execution", status: validationPassed ? "ready" : "blocked", provenance: "project.validation", ...(validationPassed ? {} : { blockingReason: "Complete capture evidence, then run and pass declared project validation before delivery." }), operatorApprovalRequired: false }
   ];
   surface.panels[1].states = [
@@ -45,6 +45,15 @@ export async function loadUiProjectWorkspace(config: UiRuntimeConfig, projectId:
 }
 
 function displayTrustCategory(category: string): string { return category.split("_").map((part) => part[0]?.toUpperCase() + part.slice(1)).join(" "); }
+function captureTrustLabel(projectId: string, classification: { category: string; verifiedScopeIds: string[]; unverifiedRequiredScopeIds: string[]; disputedScopeIds: string[] } | undefined): string {
+  if (!classification) return `Capture Reference for ${projectId} · no signed trust record`;
+  const details = classification.category === "disputed"
+    ? `disputed: ${classification.disputedScopeIds.join(", ") || "package integrity"}`
+    : classification.unverifiedRequiredScopeIds.length > 0
+      ? `unverified: ${classification.unverifiedRequiredScopeIds.join(", ")}`
+      : `verified: ${classification.verifiedScopeIds.join(", ") || "package bindings"}`;
+  return `Capture ${displayTrustCategory(classification.category)} for ${projectId} · ${details}`;
+}
 
 export async function writeUiDecision(config: UiRuntimeConfig, projectId: string, decision: "hold" | "release"): Promise<UiOperatorDecision> {
   await readUiProject(config, projectId);

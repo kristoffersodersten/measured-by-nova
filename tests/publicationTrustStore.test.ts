@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -28,6 +28,14 @@ describe("publication trust store", () => {
     expect((await verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, input)).classification.category).toBe("verified");
     await writeFile(path.join(packageDir, "evidence.json"), "mutated");
     expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.classification.category).toBe("disputed");
+    await rm(path.join(packageDir, "evidence.json"));
+    expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.verification.codes).toContain("artifact_missing");
+    await writeFile(path.join(packageDir, "evidence.json"), artifact);
+    await writeFile(path.join(packageDir, "undeclared.txt"), "unexpected");
+    expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.verification.codes).toContain("artifact_unexpected");
+    await rm(path.join(packageDir, "undeclared.txt"));
+    await writeFile(path.join(outputDir, "publication-keys", "revoked-key-ids.json"), JSON.stringify({ schemaVersion: 1, revokedKeyIds: ["native-key-1"] }));
+    await expect(verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, input)).rejects.toThrow("publication_trust_key_revoked");
   });
 
   it("keeps manual packages reference even with verified scopes", async () => {

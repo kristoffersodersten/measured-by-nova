@@ -142,6 +142,7 @@ After building the project, register the server with your MCP client:
 | Tool | Purpose |
 | --- | --- |
 | `blender_status` | Verifies that the local Blender executable is reachable. |
+| `verify_publication_capture_package` | Verifies signed native capture evidence or records manual evidence as Reference, then persists live-revalidated public trust. |
 | `create_measurement_project` | Creates a measurement-driven project JSON workspace. |
 | `import_reference_photos` | Imports non-calibrated photos as low-confidence reference or validation inputs. |
 | `define_known_dimension` | Adds permit, drawing, or manually measured dimension constraints. |

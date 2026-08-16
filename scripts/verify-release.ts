@@ -85,7 +85,7 @@ const evidence = {
   schemaVersion: 1,
   commit,
   package: { name: "nova-measured", version: "0.1.0", filename, sha256: firstSha, bytes: firstBytes.length, reproducible: true },
-  cleanInstall: { ok: true, toolCount: tools.length, requiredTools: ["create_measurement_project", "render_digital_viewing_preview", "align_and_project_source_photo", "generate_web_viewer"] },
+  cleanInstall: { ok: true, toolCount: tools.length, requiredTools: ["create_measurement_project", "render_digital_viewing_preview", "align_and_project_source_photo", "generate_web_viewer", "verify_publication_capture_package"] },
   blender: { path: blenderPath, version: blenderVersion },
   productBoundary: { ok: true, entries: entries.length, forbidden: [] },
   recovery: { corruptedHashRejected: true, temporaryInstallRemoved: true }
