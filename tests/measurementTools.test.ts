@@ -18,6 +18,7 @@ import { MeasurementProjectSchema } from "../src/measurementContracts.js";
 import { buildModelLock } from "../src/modelLock.js";
 import { materializeProfiles } from "../src/profileGenerator.js";
 import { buildOrthographicViewRegistry } from "../src/viewRegistry.js";
+import { readUiCustomerEvidencePackage } from "../src/uiProjectState.js";
 
 function executionIntent(operation: ExecutionOperation, writeScope: ExecutionIntent["writeScope"]): ExecutionIntent {
   return {
@@ -570,6 +571,9 @@ describe("measurement MCP digital viewing tools", () => {
     const tools = makeToolHarness(outputDir);
     const tool = tools.get("generate_digital_viewing_delivery_package");
     const capture = DigitalViewingCaptureSchema.parse(loadCarportCapture());
+    const projectDir = path.join(outputDir, "measurement-projects", capture.projectId);
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(path.join(projectDir, "project.json"), JSON.stringify(MeasurementProjectSchema.parse({ schemaVersion: 1, projectId: capture.projectId, unit: "mm", artifacts: { digitalViewingRenderManifest: "renders/carport-southwest.manifest.json" } })));
     const renderManifest = buildDigitalViewingRenderManifest(capture, {
       presetId: "carport-site-southwest-preview",
       deliveryTier: "premium-sales",
@@ -727,7 +731,8 @@ describe("measurement MCP digital viewing tools", () => {
       renderManifest: executedRenderManifest,
       assetBundleManifest: assetBundle,
       assetBundleManifestPath: "asset-bundles/carport-southwest.asset-bundle.json",
-      deliveryTargets: ["photoreal-render", "material-condition-report"]
+      deliveryTargets: ["photoreal-render", "material-condition-report"],
+      outputPath: "deliveries/carport-customer-evidence.json"
     });
     const body = JSON.parse(result.content[0].text) as {
       ok: boolean;
@@ -738,6 +743,20 @@ describe("measurement MCP digital viewing tools", () => {
     expect(result.isError).toBe(false);
     expect(body.ok).toBe(true);
     expect(deliveryPackage.qualityGates.ready).toBe(true);
+    const linkedProject = MeasurementProjectSchema.parse(JSON.parse(await readFile(path.join(projectDir, "project.json"), "utf8")) as unknown);
+    expect(linkedProject.artifacts).toMatchObject({ digitalViewingDeliveryPackage: "deliveries/carport-customer-evidence.json", digitalViewingDeliveryPackageHash: deliveryPackage.hashes.packageHash });
+    await mkdir(path.join(outputDir, "renders"), { recursive: true });
+    await writeFile(path.join(outputDir, "renders/carport-southwest.manifest.json"), JSON.stringify(executedRenderManifest));
+    const customerEvidence = await readUiCustomerEvidencePackage({ host: "127.0.0.1", port: 0, outputDir, environmentTruth: { provider: "Hetzner", engine: "Blender 5.2.0", endpoint: "test", executionGeography: "remote", owner: "project-ci", costClass: "included-remote", latencyClass: "long-running", fallbackUsed: false, dataScope: ["customer-evidence"], privacyBoundary: "loopback-only; no telemetry", operatorApprovalRequired: true, auditNotes: [] } }, capture.projectId);
+    expect(customerEvidence?.measurements.find((entry) => entry.id === "overall-width")).toMatchObject({ tolerance: 1, source: "drawing", claimStatus: "reference" });
+    expect(customerEvidence?.materials.find((entry) => entry.id === "painted-white-wood-panel")).toMatchObject({ category: "wood", provenance: "photo_observed", sourcePhotos: ["photos/carport-east.jpg", "photos/carport-west.jpg"] });
+    expect(customerEvidence?.conditions.find((entry) => entry.id === "white-panel-weathering")).toMatchObject({ type: "wear", severity: "low", verification: "verified", sourcePhotos: ["photos/carport-detail-panel.jpg"] });
+    const packagePath = path.join(outputDir, "deliveries/carport-customer-evidence.json");
+    const packageBytes = await readFile(packagePath);
+    await writeFile(packagePath, "{");
+    expect(await readUiCustomerEvidencePackage({ host: "127.0.0.1", port: 0, outputDir, environmentTruth: { provider: "Hetzner", engine: "Blender 5.2.0", endpoint: "test", executionGeography: "remote", owner: "project-ci", costClass: "included-remote", latencyClass: "long-running", fallbackUsed: false, dataScope: ["customer-evidence"], privacyBoundary: "loopback-only; no telemetry", operatorApprovalRequired: true, auditNotes: [] } }, capture.projectId)).toBeNull();
+    await writeFile(packagePath, packageBytes);
+    expect(await readUiCustomerEvidencePackage({ host: "127.0.0.1", port: 0, outputDir, environmentTruth: { provider: "Hetzner", engine: "Blender 5.2.0", endpoint: "test", executionGeography: "remote", owner: "project-ci", costClass: "included-remote", latencyClass: "long-running", fallbackUsed: false, dataScope: ["customer-evidence"], privacyBoundary: "loopback-only; no telemetry", operatorApprovalRequired: true, auditNotes: [] } }, capture.projectId)).not.toBeNull();
     expect(deliveryPackage.customerReadinessSummary).toMatchObject({
       customerSurface: "internal-review",
       status: "ready",

@@ -254,6 +254,13 @@ bounded schemas and HTML escaping; a disputed live package or operator hold
 removes the entire evidence section.
 Project rows without an exact signed scope-ID binding remain visibly
 `reference` even when the package-level category is Verified.
+When a ready digital-viewing delivery package is linked to the project, the UI
+revalidates its package hash, project identity, customer-readiness gates and
+current render-manifest hash before using its richer rows. Those rows include
+measurement tolerance, material category/provenance/source-photo paths, and
+condition type/severity/verification/source-photo paths. A missing, drifted,
+malformed or stale package is ignored rather than used as customer evidence;
+the bounded project declarations remain explicitly Reference.
 
 All accepted Environment Truth fields, including data scope and any fallback
 cause/primary failure, remain visible. Operator holds are explicit,
