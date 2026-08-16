@@ -58,6 +58,12 @@ describe("executable Measured workspace", () => {
     expect(html).not.toMatch(/https?:\/\/(?!127\.0\.0\.1)/);
   });
 
+  it("fails closed for unsafe or unbound delivery links", () => {
+    const surface = buildExecutableWorkspace(config());
+    expect(() => renderWorkspaceHtml(surface, null, [{ format: "glb", sizeBytes: 10, url: "javascript:alert(1)" }])).toThrow("delivery_artifact_url_invalid");
+    expect(() => renderWorkspaceHtml(surface, null, [{ format: "glb", sizeBytes: 10, url: "/api/delivery-artifact?projectId=p&format=obj" }])).toThrow("delivery_artifact_url_invalid");
+  });
+
   it("serves loopback HTML and explicit workspace state with security headers", async () => {
     const { origin } = await runningServer();
     const page = await fetch(origin); const state = await fetch(`${origin}/api/workspace`);

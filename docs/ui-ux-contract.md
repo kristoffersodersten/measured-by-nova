@@ -222,6 +222,15 @@ Portable delivery and preview remain independent states: a valid preview never
 implies a portable export, and a valid portable export never claims that a
 preview exists. The exported BLEND must itself retain the exact model-lock hash.
 
+When the complete delivery chain is ready and no operator hold exists, the
+loopback workspace exposes format-scoped download links. The endpoint accepts
+only project id plus a declared format, revalidates the entire live evidence
+chain, and then re-opens the selected artifact without following symlinks. It
+buffers at most 256 MiB, rechecks size and SHA-256, uses a safe attachment
+filename/content type, and never accepts a filesystem path from the client.
+Unknown, held, oversized, drifted, malformed, or upstream-blocked delivery
+requests return a causal machine-readable error without partial bytes.
+
 All accepted Environment Truth fields, including data scope and any fallback
 cause/primary failure, remain visible. Operator holds are explicit,
 project-scoped, atomically persisted with mode `0600`, survive restart, and are
