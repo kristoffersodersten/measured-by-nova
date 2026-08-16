@@ -26,13 +26,14 @@ afterEach(async () => { await Promise.all(openServers.splice(0).map((server) => 
 }))); });
 
 async function runningServer(runtimeConfig = config()) {
-  for (;;) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
     const server = startUiServer(runtimeConfig); openServers.push(server); if (!server.listening) await once(server, "listening");
     const port = (server.address() as AddressInfo).port;
     if (!fetchForbiddenPorts.has(port)) return { server, origin: `http://127.0.0.1:${port}` };
     await new Promise<void>((resolve) => server.close(() => resolve()));
     openServers.splice(openServers.indexOf(server), 1);
   }
+  throw new Error("ui_test_safe_ephemeral_port_unavailable");
 }
 
 async function statusWithHost(url: string, host: string): Promise<number> {

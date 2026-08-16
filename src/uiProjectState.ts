@@ -47,7 +47,9 @@ export async function loadUiProjectWorkspace(config: UiRuntimeConfig, projectId:
 function displayTrustCategory(category: string): string { return category.split("_").map((part) => part[0]?.toUpperCase() + part.slice(1)).join(" "); }
 function captureTrustLabel(projectId: string, classification: { category: string; verifiedScopeIds: string[]; unverifiedRequiredScopeIds: string[]; disputedScopeIds: string[] } | undefined): string {
   if (!classification) return `Capture Reference for ${projectId} · no signed trust record`;
-  const details = classification.category === "disputed"
+  const details = classification.category === "reference"
+    ? "manual or unsigned reference evidence"
+    : classification.category === "disputed"
     ? `disputed: ${classification.disputedScopeIds.join(", ") || "package integrity"}`
     : classification.unverifiedRequiredScopeIds.length > 0
       ? `unverified: ${classification.unverifiedRequiredScopeIds.join(", ")}`

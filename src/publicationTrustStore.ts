@@ -55,8 +55,13 @@ export async function readLivePublicationTrust(config: BlenderConfig, projectId:
   if (stored.projectId !== projectId) throw new Error("publication_trust_project_mismatch");
   let live: StoredPublicationTrust;
   try { live = await evaluatePublicationTrust(config, stored); }
-  catch {
-    return StoredPublicationTrustSchema.parse({ ...stored, verification: { valid: false, codes: ["artifact_missing"], verifiedBindings: [] }, classification: { ...stored.classification, category: "disputed", disputedScopeIds: [...new Set([...stored.classification.disputedScopeIds, ...stored.classification.verifiedScopeIds])].sort() } });
+  catch (error) {
+    const code = (error as NodeJS.ErrnoException).code === "ENOENT"
+      ? "artifact_missing"
+      : error instanceof Error && error.message.startsWith("publication_trust_")
+        ? error.message
+        : "publication_trust_revalidation_failed";
+    return StoredPublicationTrustSchema.parse({ ...stored, verification: { valid: false, codes: [code], verifiedBindings: [] }, classification: { ...stored.classification, category: "disputed", disputedScopeIds: [...new Set([...stored.classification.disputedScopeIds, ...stored.classification.verifiedScopeIds])].sort() } });
   }
   if (live.packageManifestSha256 !== stored.packageManifestSha256) {
     return StoredPublicationTrustSchema.parse({ ...live, verification: { ...live.verification, valid: false, codes: [...new Set([...live.verification.codes, "signed_payload_hash_mismatch"])] }, classification: { ...live.classification, category: "disputed", disputedScopeIds: [...new Set([...live.classification.disputedScopeIds, ...stored.classification.verifiedScopeIds])].sort() } });
@@ -124,7 +129,7 @@ async function assertProjectIdentity(config: BlenderConfig, projectId: string): 
 async function assertWithinRoot(root: string, target: string): Promise<void> {
   const [canonicalRoot, canonicalTarget] = await Promise.all([realpath(root), realpath(target)]);
   if (canonicalTarget !== canonicalRoot && !canonicalTarget.startsWith(`${canonicalRoot}${path.sep}`)) throw new Error("publication_trust_path_escape");
-  if (!(await stat(canonicalTarget)).isFile() && canonicalTarget === target) throw new Error("publication_trust_path_invalid");
+  if (!(await stat(canonicalTarget)).isFile()) throw new Error("publication_trust_path_invalid");
 }
 async function isKeyRevoked(config: BlenderConfig, keyId: string): Promise<boolean> {
   const registryPath = safeOutputPath(config.outputDir, path.join("publication-keys", "revoked-key-ids.json"));
