@@ -64,7 +64,14 @@ export async function loadUiProjectWorkspace(config: UiRuntimeConfig, projectId:
     ...(previewEvidence ? { previewUrl: `/api/preview?projectId=${encodeURIComponent(projectId)}` } : {}),
     ...(viewerEvidence ? { viewerUrl: `/viewer/${encodeURIComponent(projectId)}/index.html` } : {})
   } : {};
-  return { surface, operatorDecision, deliveryArtifacts, customerViews, project: { projectId, modelLockValid: lock.ok, validationPassed, captureReady, publicationTrust: trust?.classification ?? null, portableExport: portableExport.status } };
+  const customerEvidence = captureTrusted && validationPassed && lock.ok && operatorDecision === null && trust ? {
+    trustCategory: trust.classification.category,
+    measurements: project.dimensions.map((entry, index) => ({ id: `dimension-${index + 1}`, label: entry.label, value: entry.valueMm, unit: "mm" as const, confidence: entry.confidence, source: entry.source, claimStatus: "reference" as const })),
+    materials: project.materialNotes.map((entry, index) => ({ id: `material-${index + 1}`, label: entry.material, target: entry.elementId ?? entry.facade ?? "unspecified", confidence: entry.confidence, source: entry.source, claimStatus: "reference" as const })),
+    conditions: trust.evidenceScopes.filter((scope) => scope.kind === "known_deviation").map((scope) => ({ id: scope.id, status: trust.classification.disputedScopeIds.includes(scope.id) ? "disputed" as const : trust.classification.verifiedScopeIds.includes(scope.id) ? "verified" as const : "reference" as const })),
+    limitation: "Only declared evidence is shown. Absence of a condition record does not prove absence of defects." as const
+  } : null;
+  return { surface, operatorDecision, deliveryArtifacts, customerViews, customerEvidence, project: { projectId, modelLockValid: lock.ok, validationPassed, captureReady, publicationTrust: trust?.classification ?? null, portableExport: portableExport.status } };
 }
 
 export async function readUiPreviewArtifact(config: UiRuntimeConfig, projectId: string) {
