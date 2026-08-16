@@ -120,7 +120,7 @@ export const ExtrudeMeshSchema = z.object({
 
 export const ExportModelSchema = z.object({
   sceneFile: SceneFileSchema,
-  format: z.enum(["glb", "obj"]),
+  format: z.enum(["glb", "obj", "usdz"]),
   outputPath: RelativePathSchema
 }).strict();
 

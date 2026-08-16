@@ -11,7 +11,7 @@ import { buildModelLock } from "../src/modelLock.js";
 type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
 
 describe("locked portable export Blender runtime", () => {
-  it("exports validated GLB and OBJ from the exact model lock and rejects later drift", async () => {
+  it("exports validated GLB, OBJ and USDZ from the exact model lock and rejects later drift", async () => {
     const outputDir = await mkdtemp(path.join(os.tmpdir(), "nova-portable-export-"));
     const config = { outputDir, timeoutMs: 120_000 };
     const projectId = "portable-proof";
@@ -33,13 +33,17 @@ describe("locked portable export Blender runtime", () => {
     const tools = new Map<string, (input: unknown) => Promise<ToolResult>>();
     const server = { tool(name: string, _description: string, _shape: unknown, handler: (input: unknown) => Promise<ToolResult>) { tools.set(name, handler); } } as unknown as McpServer;
     registerMeasurementTools(server, config);
-    const result = await tools.get("export_model")!({ projectId, formats: ["glb", "obj"], executionIntent: exportIntent() });
+    const result = await tools.get("export_model")!({ projectId, formats: ["glb", "obj", "usdz"], executionIntent: exportIntent() });
     const body = JSON.parse(result.content[0].text) as { data: { sourceBlendPath: string; artifacts: Array<{ format: string; path: string; sizeBytes: number; sha256: string }> } };
     expect(result.isError, result.content[0].text).toBe(false);
     expect(body.data.sourceBlendPath).toBe(sourceBlendPath);
-    expect(body.data.artifacts.map((artifact) => artifact.format)).toEqual(["blend", "glb", "obj", "mtl"]);
+    expect(body.data.artifacts.map((artifact) => artifact.format)).toEqual(["blend", "glb", "obj", "usdz", "mtl"]);
     expect(body.data.artifacts.every((artifact) => artifact.sizeBytes > 0 && artifact.sha256.length === 64)).toBe(true);
+    expect(await readFile(path.join(outputDir, body.data.artifacts.find((artifact) => artifact.format === "blend")!.path))).toEqual(await readFile(path.join(outputDir, sourceBlendPath)));
     expect((await readFile(path.join(outputDir, body.data.artifacts.find((artifact) => artifact.format === "glb")!.path))).subarray(0, 4).toString("ascii")).toBe("glTF");
+    const usdz = await readFile(path.join(outputDir, body.data.artifacts.find((artifact) => artifact.format === "usdz")!.path));
+    expect(usdz.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+    expect(usdz.includes(Buffer.from("PXR-USDC")) || usdz.includes(Buffer.from("#usda"))).toBe(true);
 
     await writeFile(path.join(outputDir, sourceBlendPath), "tampered");
     const drifted = await tools.get("export_model")!({ projectId, formats: ["glb"], executionIntent: exportIntent() });
@@ -47,6 +51,28 @@ describe("locked portable export Blender runtime", () => {
     expect(drifted.isError).toBe(true);
     expect(driftBody.error.code).toBe("model_lock_invalid");
     expect((await stat(path.join(outputDir, body.data.artifacts[0].path))).isFile()).toBe(true);
+  }, 120_000);
+
+  it("rejects an empty USDZ stage and removes every partial export artifact", async () => {
+    const outputDir = await mkdtemp(path.join(os.tmpdir(), "nova-usdz-empty-"));
+    const config = { outputDir, timeoutMs: 120_000 };
+    const projectId = "empty-usdz-proof";
+    const sourceBlendPath = `measurement-projects/${projectId}/artifacts/${projectId}.blend`;
+    const projectDir = path.join(outputDir, "measurement-projects", projectId);
+    await mkdir(projectDir, { recursive: true });
+    const project = MeasurementProjectSchema.parse({ schemaVersion: 1, projectId, unit: "mm", artifacts: { blend: sourceBlendPath } });
+    const generated = await runBlenderJob(config, { mode: "measurement_project", operation: "generate_model", project }, sourceBlendPath);
+    expect(generated.ok, generated.stderr).toBe(true);
+    const modelLock = await buildModelLock(config, project, { lockedAt: "2026-08-15T00:00:00.000Z", lockedBy: "reviewer", reason: "Negative runtime proof" });
+    await writeFile(path.join(projectDir, "project.json"), JSON.stringify({ ...project, modelLock }), "utf8");
+    const tools = new Map<string, (input: unknown) => Promise<ToolResult>>();
+    const server = { tool(name: string, _description: string, _shape: unknown, handler: (input: unknown) => Promise<ToolResult>) { tools.set(name, handler); } } as unknown as McpServer;
+    registerMeasurementTools(server, config);
+    const result = await tools.get("export_model")!({ projectId, formats: ["usdz"], executionIntent: exportIntent() });
+    expect(result.isError).toBe(true);
+    expect(JSON.parse(result.content[0].text)).toMatchObject({ error: { code: "portable_export_failed" } });
+    await expect(stat(path.join(projectDir, "artifacts", `${projectId}.usdz`))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(path.join(projectDir, "artifacts", `${projectId}-export.blend`))).rejects.toMatchObject({ code: "ENOENT" });
   }, 120_000);
 });
 

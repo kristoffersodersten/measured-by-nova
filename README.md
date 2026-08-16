@@ -79,7 +79,7 @@ See [MVP product contract](docs/mvp.md).
 - Use deterministic explicit-anchor planar alignment and source-backed Blender
   projection today; future local photogrammetry may propose anchors but cannot
   bypass provenance, uncertainty, geometry-authority, or review gates.
-- Export validated `.blend`, `.glb`, and `.obj` artifacts from the exact current model lock, plus orthographic elevation views, permit-support PDFs, and future real-time engine targets.
+- Export validated `.blend`, `.glb`, `.obj`, and `.usdz` artifacts from the exact current model lock, plus orthographic elevation views and permit-support PDFs.
 - Keep legacy 2D sketch and primitive 3D tools for low-level utility work.
 - Run explicit Blender Python only as an unsafe opt-in fallback.
 - Validate all tool inputs with typed Zod contracts.
@@ -155,7 +155,7 @@ After building the project, register the server with your MCP client:
 | `validate_model` | Validates geometry and confidence rules. |
 | `lock_model_for_export` | Locks a human-reviewed model before permit-support export. |
 | `generate_elevation_views` | Creates orthographic plan, elevation, and section views. |
-| `export_model` | Exports measured artifacts as `.blend`, `.glb`, and/or `.obj`. |
+| `export_model` | Exports measured artifacts as `.blend`, `.glb`, `.obj`, and/or `.usdz`. |
 | `generate_web_viewer` | Builds an offline, integrity-bound browser viewer from the exact current model lock. |
 | `export_dimensioned_drawings` | Generates a permit-support visualization PDF artifact. |
 | `export_facade_completion_pack` | Exports the MVP facade-completion package from a locked model. |
