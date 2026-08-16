@@ -241,15 +241,16 @@ async function acquireProjectTrustFileLock(lockPath: string): Promise<() => Prom
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       if (await lockOwnerIsDead(lockPath)) {
         let ownsReclaim = false;
+        let reclaimFailure: unknown;
         try {
           await mkdir(reclaimPath);
           ownsReclaim = true;
           if (await lockOwnerIsDead(lockPath)) await rm(lockPath, { recursive: true, force: true });
         } catch (reclaimError) {
-          if ((reclaimError as NodeJS.ErrnoException).code !== "EEXIST") throw reclaimError;
-        } finally {
-          if (ownsReclaim) try { await rm(reclaimPath); } catch (releaseError) { if ((releaseError as NodeJS.ErrnoException).code !== "ENOENT") throw releaseError; }
+          if ((reclaimError as NodeJS.ErrnoException).code !== "EEXIST") reclaimFailure = reclaimError;
         }
+        if (ownsReclaim) await rm(reclaimPath, { force: true });
+        if (reclaimFailure) throw reclaimFailure;
         continue;
       }
       await delay(25);
