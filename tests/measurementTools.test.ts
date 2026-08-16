@@ -746,6 +746,20 @@ describe("measurement MCP digital viewing tools", () => {
       missingRequiredTargetCount: 0,
       failedQualityCheckCount: 0
     });
+    const assertedViewer = await tool!.handler({
+      capture,
+      renderManifest: executedRenderManifest,
+      assetBundleManifest: assetBundle,
+      assetBundleManifestPath: "asset-bundles/carport-southwest.asset-bundle.json",
+      customerSurface: "showroom",
+      deliveryTargets: ["photoreal-render", "material-condition-report", "glb", "web-viewer"],
+      deliveryArtifacts: [
+        { target: "glb", path: "exports/asserted.glb", hash: "a".repeat(64) },
+        { target: "web-viewer", path: "web/asserted/viewer-manifest.json", hash: "b".repeat(64) }
+      ]
+    });
+    expect(assertedViewer.isError).toBe(true);
+    expect((JSON.parse(assertedViewer.content[0].text) as { error: { code: string } }).error.code).toBe("web_viewer_evidence_invalid");
     expect(deliveryPackage.renderQualityCoverage).toMatchObject({
       status: "ready",
       declared: {

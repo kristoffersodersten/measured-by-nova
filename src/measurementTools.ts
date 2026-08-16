@@ -63,6 +63,7 @@ import {
   ExportProjectTemplateSchema,
   GenerateElevationViewsSchema,
   GenerateMeasuredModelSchema,
+  GenerateWebViewerSchema,
   ImportReferencePhotosSchema,
   LockModelForExportSchema,
   MeasurementProjectSchema,
@@ -71,6 +72,7 @@ import {
   type MeasurementProject,
   type ProfileInstance
 } from "./measurementContracts.js";
+import { buildWebViewerPackage, validateWebViewerPackage } from "./webViewer.js";
 
 type MachineReason = {
   id?: string;
@@ -329,6 +331,60 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
       manifest: { projectId: payload.projectId, sourceBlendPath: project.modelLock.modelArtifact, modelHash: project.modelLock.modelHash, formats: payload.formats, artifacts }
     });
     return ok(req, { blender: result, formats: payload.formats, sourceBlendPath: project.modelLock.modelArtifact, artifacts, execution: { intent: payload.executionIntent, action: executionAction } });
+  });
+
+  register(server, "generate_web_viewer", "Generate an offline integrity-bound browser viewer from the exact current model lock.", GenerateWebViewerSchema, async (input) => {
+    const req = requestId();
+    const payload = GenerateWebViewerSchema.parse(input);
+    const executionGate = evaluateExecutionIntent(payload.executionIntent, "generate-web-viewer");
+    if (!executionGate.ok) return failExecutionIntent(req, executionGate);
+    const project = materializeProfiles(await readProject(config, payload.projectId));
+    const lockValidation = await validateModelLock(config, project);
+    if (!lockValidation.ok || !project.modelLock.modelArtifact || !project.modelLock.modelHash || !project.modelLock.sourceProjectHash) {
+      return fail(req, "model_lock_invalid", "Web viewer generation requires the exact unchanged reviewed Blender model.", lockValidation.blocking.map((reason) => `${reason.code}: ${reason.message}`), { blocking: lockValidation.blocking });
+    }
+    const temporaryDirectory = path.join("measurement-projects", payload.projectId, "artifacts", `.web-viewer-source-${req}`);
+    const temporaryBlend = path.join(temporaryDirectory, "source.blend");
+    const temporaryGlb = path.join(temporaryDirectory, `${payload.projectId}.glb`);
+    const outputDirectory = payload.outputDir ?? path.join("measurement-projects", payload.projectId, "artifacts", "web-viewer");
+    let snapshot: LockedModelSnapshot;
+    try {
+      snapshot = await createLockedModelSnapshot(config, project, req, "web-viewer");
+    } catch (error) {
+      return fail(req, "model_lock_invalid", error instanceof Error ? error.message : String(error));
+    }
+    let blender: BlenderToolResult;
+    try {
+      blender = await runBlenderJob(config, { mode: "measurement_project", operation: "export_model", project, formats: ["glb"], sourceBlendPath: snapshot.path }, temporaryBlend);
+      if (!blender.ok) throw new Error(blender.stderr || "Blender web-viewer model export failed.");
+      const sourceIdentity = await validatePortableExportArtifact(config.outputDir, { format: "glb", path: temporaryGlb });
+      const viewer = await buildWebViewerPackage({
+        outputRoot: config.outputDir,
+        projectId: payload.projectId,
+        sourceGlb: safeOutputPath(config.outputDir, temporaryGlb),
+        outputDirectory,
+        requestId: req,
+        modelLock: { artifact: project.modelLock.modelArtifact, modelHash: project.modelLock.modelHash, sourceProjectHash: project.modelLock.sourceProjectHash }
+      });
+      const next = { ...project, artifacts: { ...project.artifacts, webViewer: viewer.directory, webViewerManifest: viewer.manifestPath } };
+      await writeProject(config, next);
+      await appendRequestLog(config, payload.projectId, req, "generate_web_viewer", { ...payload, sourceIdentity, viewer: viewer.manifest });
+      const executionAction = buildExecutionActionEvidence(payload.executionIntent, {
+        changedArtifacts: [viewer.directory, path.join("measurement-projects", payload.projectId, "project.json")],
+        verificationResults: [
+          { check: "schema", ok: true, evidence: "Viewer input, intent, and generated manifest matched strict schemas." },
+          { check: "quality-gate", ok: true, evidence: "Exact model lock and Blender GLB export passed without fallback." },
+          { check: "manifest", ok: true, evidence: "HTML, script, GLB, project, model lock, hashes, and Environment Truth were validated before atomic publication." }
+        ],
+        manifest: viewer.manifest
+      });
+      return ok(req, { blender, viewer, execution: { intent: payload.executionIntent, action: executionAction } }, ["Viewer is preview-only; verified measurements and material claims remain separately traceable."]);
+    } catch (error) {
+      return fail(req, "web_viewer_generation_failed", error instanceof Error ? error.message : String(error), ["Temporary viewer and Blender export artifacts were removed; no trusted partial package was published."]);
+    } finally {
+      await snapshot.remove();
+      await rm(safeOutputPath(config.outputDir, temporaryDirectory), { recursive: true, force: true });
+    }
   });
 
   register(server, "export_dimensioned_drawings", "Generate a permit-oriented visualization PDF with dimension annotations, scale bars, and a confidence legend.", ExportDimensionedDrawingsSchema, async (input) => {
@@ -810,6 +866,33 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
   register(server, "generate_digital_viewing_delivery_package", "Generate a deterministic delivery-package manifest with photoreal quality checklist, render evidence, material authoring, and material-condition evidence without changing geometry.", GenerateDigitalViewingDeliveryPackageInputSchema, async (input) => {
     const req = requestId();
     const payload = GenerateDigitalViewingDeliveryPackageInputSchema.parse(input);
+    const webViewerArtifact = payload.deliveryArtifacts.find((artifact) => artifact.target === "web-viewer");
+    if (webViewerArtifact) {
+      try {
+        if (!webViewerArtifact.hash || path.basename(webViewerArtifact.path) !== "viewer-manifest.json") throw new Error("web_viewer_manifest_identity_missing");
+        const project = materializeProfiles(await readProject(config, payload.capture.projectId));
+        const lockValidation = await validateModelLock(config, project);
+        if (!lockValidation.ok || !project.modelLock.modelArtifact || !project.modelLock.modelHash || !project.modelLock.sourceProjectHash) throw new Error("web_viewer_model_lock_invalid");
+        const manifestPath = safeOutputPath(config.outputDir, webViewerArtifact.path);
+        await assertExistingPathWithinRoot(config.outputDir, manifestPath);
+        const viewerManifest = await validateWebViewerPackage(path.dirname(manifestPath), payload.capture.projectId, {
+          artifact: project.modelLock.modelArtifact,
+          modelHash: project.modelLock.modelHash,
+          sourceProjectHash: project.modelLock.sourceProjectHash
+        });
+        const manifestHash = createHash("sha256").update(await readFile(manifestPath)).digest("hex");
+        if (manifestHash !== webViewerArtifact.hash) throw new Error("web_viewer_delivery_hash_mismatch");
+        const glbArtifact = payload.deliveryArtifacts.find((artifact) => artifact.target === "glb");
+        if (!glbArtifact?.hash || glbArtifact.hash !== viewerManifest.artifacts.model.sha256) throw new Error("web_viewer_delivery_model_mismatch");
+        const declaredGlbPath = safeOutputPath(config.outputDir, glbArtifact.path);
+        await assertExistingPathWithinRoot(config.outputDir, declaredGlbPath);
+        const declaredGlb = await readFile(declaredGlbPath);
+        if (declaredGlb.subarray(0, 4).toString("ascii") !== "glTF") throw new Error("web_viewer_delivery_glb_invalid");
+        if (createHash("sha256").update(declaredGlb).digest("hex") !== glbArtifact.hash) throw new Error("web_viewer_delivery_glb_hash_mismatch");
+      } catch (error) {
+        return fail(req, "web_viewer_evidence_invalid", error instanceof Error ? error.message : String(error), ["Showroom delivery remains blocked; caller-asserted viewer metadata is not trusted."]);
+      }
+    }
     const deliveryPackage = buildDigitalViewingDeliveryPackageManifest(
       payload.capture,
       payload.renderManifest,

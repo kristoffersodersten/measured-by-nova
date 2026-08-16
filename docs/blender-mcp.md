@@ -113,6 +113,7 @@ Every new project carries this source-of-truth policy:
 | `lock_model_for_export` | Locks a human-reviewed model before permit-support export. |
 | `generate_elevation_views` | Creates plan, elevation, and section cameras/views. |
 | `export_model` | Exports validated `.blend`, `.glb`, and/or `.obj` artifacts only from an immutable snapshot of the exact current model lock; OBJ material sidecars are included and every artifact is bound by size and SHA-256. |
+| `generate_web_viewer` | Exports an exact-lock GLB into an atomic offline HTML/WebGL package. Project, model lock, artifacts, preview classification and Environment Truth are hash-bound; no CDN, telemetry or fallback is permitted. |
 | `export_dimensioned_drawings` | Creates a validated permit-support PDF and Blender artifact from an immutable, rehashed snapshot of the exact current model lock; existing outputs are never overwritten. |
 | `export_facade_completion_pack` | Exports the MVP facade-completion package from a locked model. |
 | `export_project_template` | Creates recipient-specific packages only from an immutable, rehashed snapshot of the exact current model lock; it fails closed on drift, path escape, collision, partial output, or invalid artifacts. |

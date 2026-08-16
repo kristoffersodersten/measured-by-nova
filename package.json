@@ -62,12 +62,13 @@
     "dev": "tsx src/server.ts",
     "lint": "eslint . --ext .ts",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage --exclude tests/goldenManifest.integration.test.ts --exclude tests/sourceProjection.integration.test.ts --exclude tests/portableExport.integration.test.ts --exclude tests/lockedDeliveryPaths.integration.test.ts",
+    "test:coverage": "vitest run --coverage --exclude tests/goldenManifest.integration.test.ts --exclude tests/sourceProjection.integration.test.ts --exclude tests/portableExport.integration.test.ts --exclude tests/lockedDeliveryPaths.integration.test.ts --exclude tests/webViewer.integration.test.ts",
     "start": "node dist/src/server.js",
     "ui:start": "node dist/src/uiServer.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "three": "0.179.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {
