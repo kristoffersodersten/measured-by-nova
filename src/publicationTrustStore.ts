@@ -26,7 +26,7 @@ export const VerifyPublicationCaptureInputSchema = z.object({
   executionIntent: ExecutionIntentSchema,
   packageManifestPath: RelativePathSchema,
   publicKeyPath: RelativePathSchema.optional(),
-  disputes: z.array(PublicationDisputeSchema).default([])
+  disputes: z.array(PublicationDisputeSchema).max(10_000).default([])
 }).strict();
 
 const StoredPublicationTrustSchema = z.object({
@@ -35,7 +35,7 @@ const StoredPublicationTrustSchema = z.object({
   packageManifestPath: RelativePathSchema,
   publicKeyPath: RelativePathSchema.optional(),
   packageManifestSha256: z.string().length(64),
-  disputes: z.array(PublicationDisputeSchema),
+  disputes: z.array(PublicationDisputeSchema).max(10_000),
   verification: z.object({ valid: z.boolean(), codes: z.array(z.string()), verifiedBindings: z.array(z.string()) }).strict(),
   classification: z.object({ category: z.enum(["verified", "partially_verified", "reference", "disputed"]), verifiedScopeIds: z.array(z.string()), unverifiedRequiredScopeIds: z.array(z.string()), disputedScopeIds: z.array(z.string()) }).strict()
 }).strict();
@@ -99,6 +99,9 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
   if ((await stat(manifestPath)).size > 4 * 1024 * 1024) throw new Error("publication_trust_manifest_too_large");
   const manifestBytes = await readFile(manifestPath);
   const capturePackage = PublicationCapturePackageSchema.parse(JSON.parse(manifestBytes.toString("utf8")));
+  if (capturePackage.source === "manual_upload" && input.publicKeyPath) throw new Error("publication_trust_manual_key_forbidden");
+  const scopeIds = new Set(capturePackage.binding.evidenceScopes.map((scope) => scope.id));
+  if (input.disputes.some((dispute) => !scopeIds.has(dispute.scopeId))) throw new Error("publication_trust_dispute_scope_unknown");
   if (capturePackage.binding.manifest.reduce((total, entry) => total + entry.sizeBytes, 0) > MaxCapturePackageBytes) throw new Error("publication_trust_package_bytes_exceeded");
   if (capturePackage.binding.projectId !== input.projectId) throw new Error("publication_trust_project_mismatch");
   const packageDirectory = path.dirname(manifestPath);

@@ -84,6 +84,8 @@ describe("publication trust store", () => {
     const result = await verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { projectId, executionIntent: intent, packageManifestPath: "captures/manual-1/capture-package.json" });
     expect(result.classification.category).toBe("reference");
     expect(result.verification.codes).toContain("manual_upload");
+    await expect(verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { projectId, executionIntent: intent, packageManifestPath: "captures/manual-1/capture-package.json", publicKeyPath: "publication-keys/nonexistent.pem" })).rejects.toThrow("publication_trust_manual_key_forbidden");
+    await expect(verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { projectId, executionIntent: intent, packageManifestPath: "captures/manual-1/capture-package.json", disputes: [{ scopeId: "unknown", status: "open", reason: "Not a signed scope." }] })).rejects.toThrow("publication_trust_dispute_scope_unknown");
     await writeFile(path.join(packageDir, "evidence.json"), "changed manual evidence");
     expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.classification.category).toBe("disputed");
     await writeFile(path.join(packageDir, "capture-package.json"), JSON.stringify({ source: "manual_upload", binding: { ...binding, manifest: [{ ...binding.manifest[0], sizeBytes: 2 * 1024 * 1024 * 1024 + 1 }] } }));
