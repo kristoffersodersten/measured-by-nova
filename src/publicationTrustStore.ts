@@ -62,7 +62,12 @@ export async function verifyAndStorePublicationTrust(config: BlenderConfig, inpu
 }
 
 export async function readLivePublicationTrust(config: BlenderConfig, projectId: string): Promise<StoredPublicationTrust | null> {
-  const stored = await readStoredPublicationTrust(config, projectId);
+  let stored: StoredPublicationTrust | null;
+  try { stored = await readStoredPublicationTrust(config, projectId); }
+  catch (error) {
+    if (error instanceof Error && error.message === "publication_trust_evidence_invalid") return invalidStoredPublicationTrust(projectId);
+    throw error;
+  }
   if (!stored) return null;
   if (stored.projectId !== projectId) throw new Error("publication_trust_project_mismatch");
   let live: StoredPublicationTrust;
@@ -136,16 +141,16 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
   return StoredPublicationTrustSchema.parse({ schemaVersion: 1, projectId: input.projectId, packageManifestPath: input.packageManifestPath, ...(input.publicKeyPath ? { publicKeyPath: input.publicKeyPath } : {}), packageManifestSha256: createHash("sha256").update(manifestBytes).digest("hex"), disputes: input.disputes, verification, classification });
 }
 
-async function listFiles(root: string, prefix = "", files: string[] = []): Promise<string[]> {
+async function listFiles(root: string, prefix = "", files: string[] = [], traversal = { entries: 0 }): Promise<string[]> {
   const entries = await opendir(path.join(root, prefix));
   for await (const entry of entries) {
+    traversal.entries += 1;
+    if (traversal.entries > 10_000) throw new Error("publication_trust_artifact_count_exceeded");
     const relative = path.join(prefix, entry.name);
     if (entry.isSymbolicLink()) throw new Error("publication_trust_symlink_forbidden");
-    if (entry.isDirectory()) await listFiles(root, relative, files);
-    else if (entry.isFile()) {
-      files.push(relative);
-      if (files.length > 10_000) throw new Error("publication_trust_artifact_count_exceeded");
-    } else throw new Error("publication_trust_entry_type_unsupported");
+    if (entry.isDirectory()) await listFiles(root, relative, files, traversal);
+    else if (entry.isFile()) files.push(relative);
+    else throw new Error("publication_trust_entry_type_unsupported");
   }
   return files;
 }
@@ -195,6 +200,9 @@ async function readStoredPublicationTrust(config: BlenderConfig, projectId: stri
     if (error instanceof Error && error.message === "publication_trust_project_mismatch") throw error;
     throw new Error("publication_trust_evidence_invalid");
   }
+}
+function invalidStoredPublicationTrust(projectId: string): StoredPublicationTrust {
+  return StoredPublicationTrustSchema.parse({ schemaVersion: 1, projectId, packageManifestPath: "invalid/trust-evidence", packageManifestSha256: "0".repeat(64), disputes: [], verification: { valid: false, codes: ["publication_trust_evidence_invalid"], verifiedBindings: [] }, classification: { category: "disputed", verifiedScopeIds: [], unverifiedRequiredScopeIds: [], disputedScopeIds: ["trust-evidence"] } });
 }
 async function withProjectTrustWriteLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
   const previous = projectTrustWriteTails.get(key) ?? Promise.resolve();
