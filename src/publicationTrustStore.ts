@@ -73,10 +73,10 @@ export async function readLivePublicationTrust(config: BlenderConfig, projectId:
       : error instanceof Error && error.message.startsWith("publication_trust_")
         ? error.message
         : "publication_trust_revalidation_failed";
-    return StoredPublicationTrustSchema.parse({ ...stored, verification: { valid: false, codes: [code], verifiedBindings: [] }, classification: { ...stored.classification, category: "disputed", disputedScopeIds: [...new Set([...stored.classification.disputedScopeIds, ...stored.classification.verifiedScopeIds])].sort() } });
+    return StoredPublicationTrustSchema.parse({ ...stored, verification: { valid: false, codes: [code], verifiedBindings: [] }, classification: { ...stored.classification, category: "disputed", verifiedScopeIds: [], unverifiedRequiredScopeIds: [...new Set([...stored.classification.unverifiedRequiredScopeIds, ...stored.classification.verifiedScopeIds])].sort(), disputedScopeIds: [...new Set([...stored.classification.disputedScopeIds, ...stored.classification.verifiedScopeIds])].sort() } });
   }
   if (live.packageManifestSha256 !== stored.packageManifestSha256) {
-    return StoredPublicationTrustSchema.parse({ ...live, verification: { ...live.verification, valid: false, codes: [...new Set([...live.verification.codes, "signed_payload_hash_mismatch"])] }, classification: { ...live.classification, category: "disputed", disputedScopeIds: [...new Set([...live.classification.disputedScopeIds, ...stored.classification.verifiedScopeIds])].sort() } });
+    return StoredPublicationTrustSchema.parse({ ...live, verification: { ...live.verification, valid: false, codes: [...new Set([...live.verification.codes, "signed_payload_hash_mismatch"])] }, classification: { ...live.classification, category: "disputed", verifiedScopeIds: [], unverifiedRequiredScopeIds: [...new Set([...live.classification.unverifiedRequiredScopeIds, ...live.classification.verifiedScopeIds])].sort(), disputedScopeIds: [...new Set([...live.classification.disputedScopeIds, ...stored.classification.verifiedScopeIds])].sort() } });
   }
   if (["verified", "partially_verified"].includes(stored.classification.category) && !live.verification.valid) {
     return StoredPublicationTrustSchema.parse({ ...live, classification: { ...live.classification, category: "disputed", disputedScopeIds: [...new Set([...live.classification.disputedScopeIds, ...stored.classification.verifiedScopeIds])].sort() } });
@@ -88,13 +88,14 @@ type PublicationTrustEvaluationInput = Pick<z.infer<typeof VerifyPublicationCapt
 
 async function evaluatePublicationTrust(config: BlenderConfig, input: PublicationTrustEvaluationInput): Promise<StoredPublicationTrust> {
   const manifestPath = safeOutputPath(config.outputDir, input.packageManifestPath);
-  const packageRoot = input.packageManifestPath.split("/")[0];
+  const packageRoot = path.normalize(input.packageManifestPath).split(path.sep)[0];
   if (!packageRoot || ["measurement-projects", "publication-keys", "release", "evidence"].includes(packageRoot)) throw new Error("publication_trust_package_root_reserved");
   await assertWithinRoot(config.outputDir, manifestPath);
   const manifestBytes = await readFile(manifestPath);
   const capturePackage = PublicationCapturePackageSchema.parse(JSON.parse(manifestBytes.toString("utf8")));
   if (capturePackage.binding.projectId !== input.projectId) throw new Error("publication_trust_project_mismatch");
   const packageDirectory = path.dirname(manifestPath);
+  await assertDedicatedPackageDirectory(config.outputDir, packageDirectory, manifestPath);
   const actual = (await listFiles(packageDirectory)).filter((entry) => entry !== path.basename(manifestPath));
   const artifacts: CaptureArtifactContent[] = [];
   for (const relative of actual.sort()) {
@@ -156,6 +157,13 @@ async function assertWithinRoot(root: string, target: string): Promise<void> {
 async function assertDirectSubdirectory(root: string, child: string): Promise<void> {
   const [canonicalRoot, canonicalChild] = await Promise.all([realpath(root), realpath(child)]);
   if (canonicalChild !== path.join(canonicalRoot, path.basename(child))) throw new Error("publication_trust_key_root_escape");
+}
+async function assertDedicatedPackageDirectory(outputRoot: string, packageDirectory: string, manifestPath: string): Promise<void> {
+  const [canonicalRoot, canonicalPackageDirectory, canonicalManifest] = await Promise.all([realpath(outputRoot), realpath(packageDirectory), realpath(manifestPath)]);
+  if (path.dirname(canonicalManifest) !== canonicalPackageDirectory) throw new Error("publication_trust_manifest_symlink_forbidden");
+  const relativeDirectory = path.relative(canonicalRoot, canonicalPackageDirectory);
+  const topLevel = relativeDirectory.split(path.sep)[0];
+  if (!relativeDirectory || relativeDirectory.startsWith("..") || !topLevel || ["measurement-projects", "publication-keys", "release", "evidence"].includes(topLevel)) throw new Error("publication_trust_package_root_reserved");
 }
 async function isKeyRevoked(config: BlenderConfig, keyId: string): Promise<boolean> {
   const registryPath = safeOutputPath(config.outputDir, path.join("publication-keys", "revoked-key-ids.json"));
