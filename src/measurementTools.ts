@@ -953,6 +953,19 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
         { deliveryPackage, packagePath, blocking: deliveryPackage.qualityGates.blocking }
       );
     }
+    if (packagePath && payload.outputPath) {
+      if (!deliveryPackage.hashes.packageHash) {
+        await rm(packagePath, { force: true });
+        return fail(req, "digital_viewing_delivery_package_hash_missing", "Ready delivery package did not produce a package hash.", ["Unhashed customer evidence was removed."]);
+      }
+      try {
+        const project = await readProject(config, payload.capture.projectId);
+        await writeProject(config, { ...project, artifacts: { ...project.artifacts, digitalViewingDeliveryPackage: payload.outputPath, digitalViewingDeliveryPackageHash: deliveryPackage.hashes.packageHash } });
+      } catch (error) {
+        await rm(packagePath, { force: true });
+        return fail(req, "digital_viewing_delivery_package_persistence_failed", error instanceof Error ? error.message : String(error), ["Delivery package was removed because project evidence linkage failed."]);
+      }
+    }
     return ok(req, { deliveryPackage, packagePath }, [
       "Delivery package manifest is not geometry authority.",
       "Package indexes validated capture, material, render, and report artifacts only; it does not reconstruct or mutate geometry."

@@ -6,10 +6,10 @@ import type { BlenderConfig } from "./contracts.js";
 import { safeOutputPath } from "./blenderRunner.js";
 import { hashValidationSourceProject, validateModelLock } from "./modelLock.js";
 import { MeasurementProjectSchema } from "./measurementContracts.js";
-import { DigitalViewingRenderManifestSchema } from "./digitalViewingContracts.js";
 import { buildExecutableWorkspace, type UiRuntimeConfig } from "./uiWorkspace.js";
 import { readLivePublicationTrust } from "./publicationTrustStore.js";
 import { readLivePortableExportEvidence, readVerifiedPortableExportArtifact, type PortableExportFormat } from "./portableExportEvidence.js";
+import { DigitalViewingDeliveryPackageManifestSchema, DigitalViewingRenderManifestSchema } from "./digitalViewingContracts.js";
 import { WebViewerManifestSchema } from "./webViewer.js";
 
 const ViewerFiles = ["index.html", "viewer.js", "viewer-manifest.json", "three.module.js", "three.core.js", "GLTFLoader.js", "BufferGeometryUtils.js", "OrbitControls.js", "model.glb"] as const;
@@ -64,7 +64,8 @@ export async function loadUiProjectWorkspace(config: UiRuntimeConfig, projectId:
     ...(previewEvidence ? { previewUrl: `/api/preview?projectId=${encodeURIComponent(projectId)}` } : {}),
     ...(viewerEvidence ? { viewerUrl: `/viewer/${encodeURIComponent(projectId)}/index.html` } : {})
   } : {};
-  const customerEvidence = captureTrusted && validationPassed && lock.ok && operatorDecision === null && trust ? {
+  const detailedEvidence = captureTrusted && validationPassed && lock.ok && operatorDecision === null ? await readCustomerEvidencePackage(config, project) : null;
+  const customerEvidence = captureTrusted && validationPassed && lock.ok && operatorDecision === null && trust ? detailedEvidence ? { ...detailedEvidence, trustCategory: trust.classification.category } : {
     trustCategory: trust.classification.category,
     measurements: project.dimensions.map((entry, index) => ({ id: `dimension-${index + 1}`, label: entry.label, value: entry.valueMm, unit: "mm" as const, confidence: entry.confidence, source: entry.source, claimStatus: "reference" as const })),
     materials: project.materialNotes.map((entry, index) => ({ id: `material-${index + 1}`, label: entry.material, target: entry.elementId ?? entry.facade ?? "unspecified", confidence: entry.confidence, source: entry.source, claimStatus: "reference" as const })),
@@ -72,6 +73,33 @@ export async function loadUiProjectWorkspace(config: UiRuntimeConfig, projectId:
     limitation: "Only declared evidence is shown. Absence of a condition record does not prove absence of defects." as const
   } : null;
   return { surface, operatorDecision, deliveryArtifacts, customerViews, customerEvidence, project: { projectId, modelLockValid: lock.ok, validationPassed, captureReady, publicationTrust: trust?.classification ?? null, portableExport: portableExport.status } };
+}
+
+async function readCustomerEvidencePackage(config: UiRuntimeConfig, project: Awaited<ReturnType<typeof readUiProject>>) {
+  const packageRelative = project.artifacts.digitalViewingDeliveryPackage;
+  const expectedPackageHash = project.artifacts.digitalViewingDeliveryPackageHash;
+  if (!packageRelative && !expectedPackageHash) return null;
+  if (!packageRelative || !expectedPackageHash || !project.artifacts.digitalViewingRenderManifest) return null;
+  try {
+    const packageBytes = await readCanonicalStableFile(config.outputDir, safeOutputPath(config.outputDir, packageRelative), 16 * 1024 * 1024);
+    const manifest = DigitalViewingDeliveryPackageManifestSchema.parse(JSON.parse(packageBytes.toString("utf8")));
+    const { packageHash, ...hashesWithoutPackageHash } = manifest.hashes;
+    const computedPackageHash = createHash("sha256").update(stableJson({ ...manifest, hashes: hashesWithoutPackageHash })).digest("hex");
+    if (manifest.projectId !== project.projectId || packageHash !== expectedPackageHash || computedPackageHash !== packageHash || !manifest.qualityGates.ready || manifest.customerReadinessSummary.status !== "ready") return null;
+    const renderBytes = await readCanonicalStableFile(config.outputDir, safeOutputPath(config.outputDir, project.artifacts.digitalViewingRenderManifest), 16 * 1024 * 1024);
+    const renderManifest = DigitalViewingRenderManifestSchema.parse(JSON.parse(renderBytes.toString("utf8")));
+    if (renderManifest.projectId !== project.projectId || renderManifest.hashes.manifestHash !== manifest.hashes.renderManifestHash) return null;
+    return {
+      measurements: manifest.measurementEvidenceCoverage.entries.map((entry) => ({ id: entry.measurementId, label: entry.label, value: entry.value, unit: entry.unit, tolerance: entry.tolerance, confidence: entry.confidence, source: entry.source, claimStatus: "reference" as const })),
+      materials: manifest.materialRenderCoverage.entries.map((entry) => ({ id: entry.materialId, label: entry.category, target: entry.hostElementId ?? "unspecified", category: entry.category, provenance: entry.provenance, confidence: entry.confidence, sourcePhotos: entry.sourcePhotos, claimStatus: "reference" as const })),
+      conditions: manifest.conditionOverlayCoverage.entries.map((entry) => ({ id: entry.conditionId, type: entry.type, severity: entry.severity, verification: entry.verification, sourcePhotos: entry.sourcePhotos, status: entry.overlayStatus === "ready" ? "reference" as const : "disputed" as const })),
+      limitation: "Only declared evidence is shown. Absence of a condition record does not prove absence of defects." as const
+    };
+  } catch { return null; }
+}
+
+export async function readUiCustomerEvidencePackage(config: UiRuntimeConfig, projectId: string) {
+  return await readCustomerEvidencePackage(config, await readUiProject(config, projectId));
 }
 
 export async function readUiPreviewArtifact(config: UiRuntimeConfig, projectId: string) {
@@ -277,7 +305,7 @@ function viewerContentType(filename: string): string {
 
 function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value && typeof value === "object") return `{${Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(",")}}`;
+  if (value && typeof value === "object") return `{${Object.entries(value as Record<string, unknown>).filter(([, item]) => item !== undefined).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(",")}}`;
   return JSON.stringify(value);
 }
 

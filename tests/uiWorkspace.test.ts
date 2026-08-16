@@ -69,19 +69,23 @@ describe("executable Measured workspace", () => {
     const surface = buildExecutableWorkspace(config());
     const evidence = {
       trustCategory: "partially_verified" as const,
-      measurements: [{ id: "dimension-1", label: "Width <script>", value: 4200, unit: "mm" as const, confidence: "high" as const, source: "manual_measurement" as const, claimStatus: "reference" as const }],
-      materials: [{ id: "material-1", label: "Paint & glass", target: "body", confidence: "medium" as const, source: "photo_reference" as const, claimStatus: "reference" as const }],
-      conditions: [{ id: "scratch-1", status: "disputed" as const }],
+      measurements: [{ id: "dimension-1", label: "Width <script>", value: 4200, unit: "mm" as const, tolerance: 2, confidence: "high" as const, source: "manual_measurement" as const, claimStatus: "reference" as const }],
+      materials: [{ id: "material-1", label: "Paint & glass", target: "body", category: "paint", provenance: "photo_observed", confidence: "medium" as const, sourcePhotos: ["photos/paint-detail.jpg"], claimStatus: "reference" as const }],
+      conditions: [{ id: "scratch-1", type: "scratch", severity: "medium", verification: "verified", sourcePhotos: ["photos/scratch-detail.jpg"], status: "reference" as const }],
       limitation: "Only declared evidence is shown. Absence of a condition record does not prove absence of defects." as const
     };
     const html = renderWorkspaceHtml(surface, null, [], {}, evidence);
     expect(html).toContain('id="customer-evidence"');
     expect(html).toContain("Partially Verified");
-    expect(html).toContain("4200 mm · high · manual_measurement · reference");
+    expect(html).toContain("4200 mm ± 2 mm · high · manual_measurement · reference");
     expect(html).toContain("Paint &amp; glass");
+    expect(html).toContain("photos/paint-detail.jpg");
     expect(html).toContain("scratch-1");
+    expect(html).toContain("medium · verified · reference");
+    expect(html).toContain("photos/scratch-detail.jpg");
     expect(html).toContain("No combined seller score");
     expect(html).not.toContain("Width <script>");
+    expect(renderWorkspaceHtml(surface, null, [], {}, { ...evidence, measurements: [{ ...evidence.measurements[0], value: 0, unit: "deg" }] })).toContain("0 deg ± 2 deg");
     expect(renderWorkspaceHtml(surface, "operator", [], {}, evidence)).not.toContain('id="customer-evidence"');
   });
 
