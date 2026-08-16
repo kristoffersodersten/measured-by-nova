@@ -67,7 +67,9 @@ export async function readLivePublicationTrust(config: BlenderConfig, projectId:
   return live;
 }
 
-async function evaluatePublicationTrust(config: BlenderConfig, input: z.infer<typeof VerifyPublicationCaptureInputSchema>): Promise<StoredPublicationTrust> {
+type PublicationTrustEvaluationInput = Pick<z.infer<typeof VerifyPublicationCaptureInputSchema>, "projectId" | "packageManifestPath" | "publicKeyPath" | "evidenceScopes" | "disputes">;
+
+async function evaluatePublicationTrust(config: BlenderConfig, input: PublicationTrustEvaluationInput): Promise<StoredPublicationTrust> {
   const manifestPath = safeOutputPath(config.outputDir, input.packageManifestPath);
   await assertWithinRoot(config.outputDir, manifestPath);
   const manifestBytes = await readFile(manifestPath);
