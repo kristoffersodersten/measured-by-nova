@@ -2,6 +2,8 @@ import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { once } from "node:events";
+import type { AddressInfo } from "node:net";
 import { deflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -12,7 +14,9 @@ import { MeasurementProjectSchema } from "../src/measurementContracts.js";
 import { materializeProfiles } from "../src/profileGenerator.js";
 import { buildOrthographicViewRegistry } from "../src/viewRegistry.js";
 import { evaluateFacadeQaManifest } from "../src/facadeQa.js";
-import { hashSourceProject } from "../src/modelLock.js";
+import { buildModelLock, hashSourceProject, hashValidationSourceProject } from "../src/modelLock.js";
+import { verifyAndStorePublicationTrust } from "../src/publicationTrustStore.js";
+import { startUiServer } from "../src/uiServer.js";
 
 const ManifestSchema = z.object({
   schemaVersion: z.literal(1),
@@ -148,6 +152,14 @@ function crc32(buffer: Buffer): number {
     }
   }
   return (crc ^ 0xffffffff) >>> 0;
+}
+
+async function storeUiManualTrust(outputDir: string, projectId: string): Promise<void> {
+  const packageDir = path.join(outputDir, "captures", `${projectId}-manual`); await mkdir(packageDir, { recursive: true });
+  const evidence = Buffer.from("manual capture reference"); await writeFile(path.join(packageDir, "evidence.json"), evidence);
+  const binding = { schemaVersion: 1, packageId: `${projectId}-manual`, projectId, objectId: "object-1", captureProtocolId: "protocol-1", kitId: "kit-1", commissioningPartyId: "party-1", capturedAt: "2026-08-16T00:00:00.000Z", evidenceScopes: [{ id: "dimensions", kind: "measurement", required: true, verified: true }], manifest: [{ path: "evidence.json", sha256: createHash("sha256").update(evidence).digest("hex"), sizeBytes: evidence.byteLength }] };
+  await writeFile(path.join(packageDir, "capture-package.json"), JSON.stringify({ source: "manual_upload", binding }));
+  await verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { projectId, packageManifestPath: `captures/${projectId}-manual/capture-package.json`, executionIntent: { intentId: "preview-ui-proof", operation: "verify-publication-capture", objective: "Bind preview UI proof to capture evidence", writeScope: ["project-state", "manifest"], forbiddenScope: ["source-measurements", "locked-geometry"], selectedToolPath: "mcp:nova-measured", acceptanceChecks: ["schema", "manifest"], executionPolicy: { locality: "local-only", telemetry: false, fallback: "none", geometryMutation: false } } });
 }
 
 function stableJson(value: unknown): string {
@@ -917,6 +929,22 @@ describe("golden manifest integration", () => {
     expect((await stat(path.join(outputDir, "renders/vehicle-front.png"))).isFile()).toBe(true);
     expect((await stat(path.join(outputDir, "renders/vehicle-front.manifest.json"))).isFile()).toBe(true);
     expect((await stat(path.join(outputDir, "renders/vehicle-front-render.blend"))).isFile()).toBe(true);
+
+    const projectDir = path.join(outputDir, "measurement-projects", capture.projectId); await mkdir(projectDir, { recursive: true });
+    const previewProjectBase = MeasurementProjectSchema.parse({ schemaVersion: 1, projectId: capture.projectId, unit: "mm", photos: [{ path: capture.photos[0].path, role: "reference", confidence: "high" }], dimensions: [{ label: "overall length", valueMm: 4820, confidence: "high", source: "manual_measurement" }], artifacts: { blend: sourceBlendPath, digitalViewingPreview: manifest.artifacts.render, digitalViewingRenderManifest: manifest.artifacts.manifest } });
+    const previewProject = MeasurementProjectSchema.parse({ ...previewProjectBase, validation: { ok: true, checks: [{ name: "capture-complete", ok: true, message: "validated" }], warnings: [], sourceProjectHash: hashValidationSourceProject(previewProjectBase) } });
+    const previewLock = await buildModelLock({ outputDir, timeoutMs: 1 }, previewProject, { lockedAt: "2026-08-16T00:00:00.000Z", lockedBy: "reviewer", reason: "Preview UI proof" });
+    await writeFile(path.join(projectDir, "project.json"), JSON.stringify({ ...previewProject, modelLock: previewLock })); await storeUiManualTrust(outputDir, capture.projectId);
+    const uiConfig = { host: "127.0.0.1" as const, port: 0, outputDir, environmentTruth: { provider: "Hetzner", engine: "Blender 5.2.0", endpoint: "exact-sha-runtime", executionGeography: "remote" as const, owner: "project-ci", costClass: "included-remote" as const, latencyClass: "long-running" as const, fallbackUsed: false, dataScope: ["workspace-state", "preview"], privacyBoundary: "loopback-only; no telemetry", operatorApprovalRequired: true, auditNotes: ["integration proof"] } };
+    const uiServer = startUiServer(uiConfig); if (!uiServer.listening) await once(uiServer, "listening"); const origin = `http://127.0.0.1:${(uiServer.address() as AddressInfo).port}`;
+    try {
+      const workspace = await (await fetch(`${origin}/api/workspace?projectId=${capture.projectId}`)).json() as { customerViews: { previewUrl?: string } }; expect(workspace.customerViews.previewUrl).toBe(`/api/preview?projectId=${capture.projectId}`);
+      const response = await fetch(`${origin}${workspace.customerViews.previewUrl}`); expect(response.status).toBe(200); expect(response.headers.get("content-type")).toBe("image/png"); expect(Buffer.from(await response.arrayBuffer())).toEqual(renderFile);
+      expect(await (await fetch(`${origin}/?projectId=${capture.projectId}`)).text()).toContain("not verified truth");
+      await writeFile(path.join(outputDir, manifest.artifacts.render), "tampered"); expect((await fetch(`${origin}${workspace.customerViews.previewUrl}`)).status).toBe(409); await writeFile(path.join(outputDir, manifest.artifacts.render), renderFile);
+      await fetch(`${origin}/api/operator-decision`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify({ decision: "hold", actor: "operator", projectId: capture.projectId }) }); expect((await fetch(`${origin}${workspace.customerViews.previewUrl}`)).status).toBe(409);
+      await fetch(`${origin}/api/operator-decision`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify({ decision: "release", actor: "operator", projectId: capture.projectId }) }); expect((await fetch(`${origin}${workspace.customerViews.previewUrl}`)).status).toBe(200);
+    } finally { await new Promise<void>((resolve) => uiServer.close(() => resolve())); }
 
     const validRenderHash = createHash("sha256").update(renderFile).digest("hex");
     const mismatchedSource = await runBlenderJob(

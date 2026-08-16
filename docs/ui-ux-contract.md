@@ -231,6 +231,16 @@ filename/content type, and never accepts a filesystem path from the client.
 Unknown, held, oversized, drifted, malformed, or upstream-blocked delivery
 requests return a causal machine-readable error without partial bytes.
 
+The same customer surface exposes a source-backed PNG preview and an interactive
+offline WebGL viewer only while capture trust, project validation, the current
+model lock, and each artifact-specific manifest remain live-valid. Preview UI is
+always labelled `Photorealistic preview - not verified truth`; it never inherits
+technical, permit, or geometry authority. Viewer requests are restricted to the
+fixed manifest-declared package filenames under `/viewer/<projectId>/`, with
+network forbidden, telemetry off, fallback none, canonical no-symlink reads,
+bounded bytes, content hashes, and a complete gate recheck after every read.
+Operator hold removes all customer-viewing links and blocks their endpoints.
+
 All accepted Environment Truth fields, including data scope and any fallback
 cause/primary failure, remain visible. Operator holds are explicit,
 project-scoped, atomically persisted with mode `0600`, survive restart, and are
