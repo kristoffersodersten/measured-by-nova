@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -45,9 +45,17 @@ describe("publication trust store", () => {
     expect(revoked.verification.codes).toContain("signing_key_revoked");
     await writeFile(path.join(outputDir, "publication-keys", "native-key-1.pem"), privateKey.export({ type: "pkcs8", format: "pem" }));
     await expect(verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, input)).rejects.toThrow("publication_trust_private_key_forbidden");
+    const { publicKey: rsaPublicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    await writeFile(path.join(outputDir, "publication-keys", "native-key-1.pem"), rsaPublicKey.export({ type: "spki", format: "pem" }));
+    await expect(verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, input)).rejects.toThrow("publication_trust_key_algorithm_invalid");
     await writeFile(path.join(outputDir, "publication-keys", "native-key-1.pem"), publicKey.export({ type: "spki", format: "pem" }));
     await writeFile(path.join(outputDir, "publication-keys", "revoked-key-ids.json"), "{");
     expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.verification.codes).toEqual(["publication_trust_revocation_registry_invalid"]);
+    const externalKeys = await mkdtemp(path.join(os.tmpdir(), "publication-external-keys-"));
+    await writeFile(path.join(externalKeys, "native-key-1.pem"), publicKey.export({ type: "spki", format: "pem" }));
+    await rm(path.join(outputDir, "publication-keys"), { recursive: true });
+    await symlink(externalKeys, path.join(outputDir, "publication-keys"));
+    await expect(verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, input)).rejects.toThrow("publication_trust_key_root_escape");
   });
 
   it("keeps manual packages reference even with verified scopes", async () => {

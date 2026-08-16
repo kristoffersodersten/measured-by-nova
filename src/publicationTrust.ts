@@ -43,6 +43,13 @@ const CapturePackageBindingSchema = z.object({
     }
     paths.add(entry.path);
   }
+  const scopeIds = new Set<string>();
+  for (const scope of value.evidenceScopes) {
+    if (scopeIds.has(scope.id)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["evidenceScopes"], message: `Duplicate evidence scope ID: ${scope.id}` });
+    }
+    scopeIds.add(scope.id);
+  }
 });
 
 const NativeCapturePackageSchema = z.object({

@@ -126,4 +126,8 @@ describe("publication trust contract", () => {
       count: 5
     });
   });
+
+  it("rejects ambiguous duplicate signed evidence scope IDs", () => {
+    expect(() => PublicationCapturePackageSchema.parse({ source: "manual_upload", binding: { ...binding, evidenceScopes: [binding.evidenceScopes[0], { ...binding.evidenceScopes[0], verified: false }] } })).toThrow("Duplicate evidence scope ID");
+  });
 });

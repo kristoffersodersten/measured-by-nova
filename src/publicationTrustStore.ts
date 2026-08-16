@@ -1,4 +1,4 @@
-import { createHash, createPublicKey } from "node:crypto";
+import { createHash, createPublicKey, type KeyObject } from "node:crypto";
 import { readFile, readdir, realpath, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
@@ -87,17 +87,20 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
     await assertWithinRoot(packageDirectory, artifactPath);
     return { path: relative, content: await readFile(artifactPath) };
   }));
-  let publicKey: string | undefined;
+  let publicKey: KeyObject | undefined;
   let keyRevoked = false;
   if (capturePackage.source === "native_app") {
     if (!input.publicKeyPath) throw new Error("publication_trust_public_key_required");
     if (!input.publicKeyPath.startsWith("publication-keys/")) throw new Error("publication_trust_public_key_scope_invalid");
+    const keyRoot = safeOutputPath(config.outputDir, "publication-keys");
     const keyPath = safeOutputPath(config.outputDir, input.publicKeyPath);
-    await assertWithinRoot(safeOutputPath(config.outputDir, "publication-keys"), keyPath);
+    await assertDirectSubdirectory(config.outputDir, keyRoot);
+    await assertWithinRoot(keyRoot, keyPath);
     if (path.basename(input.publicKeyPath, path.extname(input.publicKeyPath)) !== capturePackage.signature.keyId) throw new Error("publication_trust_key_identity_mismatch");
-    publicKey = await readFile(keyPath, "utf8");
-    if (/-----BEGIN (?:ENCRYPTED )?PRIVATE KEY-----/.test(publicKey)) throw new Error("publication_trust_private_key_forbidden");
-    try { createPublicKey(publicKey); } catch { throw new Error("publication_trust_public_key_invalid"); }
+    const keyPem = await readFile(keyPath, "utf8");
+    if (/-----BEGIN [^-]*PRIVATE KEY-----/.test(keyPem)) throw new Error("publication_trust_private_key_forbidden");
+    try { publicKey = createPublicKey(keyPem); } catch { throw new Error("publication_trust_public_key_invalid"); }
+    if (publicKey.asymmetricKeyType !== "ed25519") throw new Error("publication_trust_key_algorithm_invalid");
     keyRevoked = await isKeyRevoked(config, capturePackage.signature.keyId);
   }
   const evaluatedVerification = verifyPublicationCapturePackage(capturePackage, artifacts, (keyId) => capturePackage.source === "native_app" && !keyRevoked && keyId === capturePackage.signature.keyId ? publicKey : undefined);
@@ -130,6 +133,10 @@ async function assertWithinRoot(root: string, target: string): Promise<void> {
   const [canonicalRoot, canonicalTarget] = await Promise.all([realpath(root), realpath(target)]);
   if (canonicalTarget !== canonicalRoot && !canonicalTarget.startsWith(`${canonicalRoot}${path.sep}`)) throw new Error("publication_trust_path_escape");
   if (!(await stat(canonicalTarget)).isFile()) throw new Error("publication_trust_path_invalid");
+}
+async function assertDirectSubdirectory(root: string, child: string): Promise<void> {
+  const [canonicalRoot, canonicalChild] = await Promise.all([realpath(root), realpath(child)]);
+  if (canonicalChild !== path.join(canonicalRoot, path.basename(child))) throw new Error("publication_trust_key_root_escape");
 }
 async function isKeyRevoked(config: BlenderConfig, keyId: string): Promise<boolean> {
   const registryPath = safeOutputPath(config.outputDir, path.join("publication-keys", "revoked-key-ids.json"));
