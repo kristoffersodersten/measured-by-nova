@@ -962,10 +962,8 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
         const project = await readProject(config, payload.capture.projectId);
         await writeProject(config, { ...project, artifacts: { ...project.artifacts, digitalViewingDeliveryPackage: payload.outputPath, digitalViewingDeliveryPackageHash: deliveryPackage.hashes.packageHash } });
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-          await rm(packagePath, { force: true });
-          return fail(req, "digital_viewing_delivery_package_persistence_failed", error instanceof Error ? error.message : String(error), ["Delivery package was removed because project evidence linkage failed."]);
-        }
+        await rm(packagePath, { force: true });
+        return fail(req, "digital_viewing_delivery_package_persistence_failed", error instanceof Error ? error.message : String(error), ["Delivery package was removed because project evidence linkage failed."]);
       }
     }
     return ok(req, { deliveryPackage, packagePath }, [

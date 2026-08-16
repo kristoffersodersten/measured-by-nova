@@ -79,9 +79,13 @@ describe("executable Measured workspace", () => {
     expect(html).toContain("Partially Verified");
     expect(html).toContain("4200 mm ± 2 mm · high · manual_measurement · reference");
     expect(html).toContain("Paint &amp; glass");
-    expect(html).toContain("photos/paint-detail.jpg"); expect(html).toContain("scratch-1"); expect(html).toContain("medium · verified · reference"); expect(html).toContain("photos/scratch-detail.jpg");
+    expect(html).toContain("photos/paint-detail.jpg");
+    expect(html).toContain("scratch-1");
+    expect(html).toContain("medium · verified · reference");
+    expect(html).toContain("photos/scratch-detail.jpg");
     expect(html).toContain("No combined seller score");
     expect(html).not.toContain("Width <script>");
+    expect(renderWorkspaceHtml(surface, null, [], {}, { ...evidence, measurements: [{ ...evidence.measurements[0], value: 0, unit: "deg" }] })).toContain("0 deg ± 2 deg");
     expect(renderWorkspaceHtml(surface, "operator", [], {}, evidence)).not.toContain('id="customer-evidence"');
   });
 

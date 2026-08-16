@@ -753,7 +753,9 @@ describe("measurement MCP digital viewing tools", () => {
     expect(customerEvidence?.conditions.find((entry) => entry.id === "white-panel-weathering")).toMatchObject({ type: "wear", severity: "low", verification: "verified", sourcePhotos: ["photos/carport-detail-panel.jpg"] });
     const packagePath = path.join(outputDir, "deliveries/carport-customer-evidence.json");
     const packageBytes = await readFile(packagePath);
-    await writeFile(packagePath, "{");
+    const tamperedPackage = JSON.parse(packageBytes.toString("utf8")) as { measurementEvidenceCoverage: { entries: Array<{ value: number }> } };
+    tamperedPackage.measurementEvidenceCoverage.entries[0].value += 1;
+    await writeFile(packagePath, JSON.stringify(tamperedPackage));
     expect(await readUiCustomerEvidencePackage({ host: "127.0.0.1", port: 0, outputDir, environmentTruth: { provider: "Hetzner", engine: "Blender 5.2.0", endpoint: "test", executionGeography: "remote", owner: "project-ci", costClass: "included-remote", latencyClass: "long-running", fallbackUsed: false, dataScope: ["customer-evidence"], privacyBoundary: "loopback-only; no telemetry", operatorApprovalRequired: true, auditNotes: [] } }, capture.projectId)).toBeNull();
     await writeFile(packagePath, packageBytes);
     expect(await readUiCustomerEvidencePackage({ host: "127.0.0.1", port: 0, outputDir, environmentTruth: { provider: "Hetzner", engine: "Blender 5.2.0", endpoint: "test", executionGeography: "remote", owner: "project-ci", costClass: "included-remote", latencyClass: "long-running", fallbackUsed: false, dataScope: ["customer-evidence"], privacyBoundary: "loopback-only; no telemetry", operatorApprovalRequired: true, auditNotes: [] } }, capture.projectId)).not.toBeNull();

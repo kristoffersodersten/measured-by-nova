@@ -83,7 +83,9 @@ async function readCustomerEvidencePackage(config: UiRuntimeConfig, project: Awa
   try {
     const packageBytes = await readCanonicalStableFile(config.outputDir, safeOutputPath(config.outputDir, packageRelative), 16 * 1024 * 1024);
     const manifest = DigitalViewingDeliveryPackageManifestSchema.parse(JSON.parse(packageBytes.toString("utf8")));
-    if (manifest.projectId !== project.projectId || manifest.hashes.packageHash !== expectedPackageHash || !manifest.qualityGates.ready || manifest.customerReadinessSummary.status !== "ready") return null;
+    const { packageHash, ...hashesWithoutPackageHash } = manifest.hashes;
+    const computedPackageHash = createHash("sha256").update(stableJson({ ...manifest, hashes: hashesWithoutPackageHash })).digest("hex");
+    if (manifest.projectId !== project.projectId || packageHash !== expectedPackageHash || computedPackageHash !== packageHash || !manifest.qualityGates.ready || manifest.customerReadinessSummary.status !== "ready") return null;
     const renderBytes = await readCanonicalStableFile(config.outputDir, safeOutputPath(config.outputDir, project.artifacts.digitalViewingRenderManifest), 16 * 1024 * 1024);
     const renderManifest = DigitalViewingRenderManifestSchema.parse(JSON.parse(renderBytes.toString("utf8")));
     if (renderManifest.projectId !== project.projectId || renderManifest.hashes.manifestHash !== manifest.hashes.renderManifestHash) return null;
@@ -303,7 +305,7 @@ function viewerContentType(filename: string): string {
 
 function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value && typeof value === "object") return `{${Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(",")}}`;
+  if (value && typeof value === "object") return `{${Object.entries(value as Record<string, unknown>).filter(([, item]) => item !== undefined).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(",")}}`;
   return JSON.stringify(value);
 }
 
