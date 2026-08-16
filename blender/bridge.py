@@ -2,6 +2,7 @@ import builtins
 import hashlib
 import json
 import math
+import shutil
 import struct
 import sys
 import traceback
@@ -362,6 +363,9 @@ def export_project(payload, output_path):
         bpy.ops.wm.usd_import(filepath=str(usdz_path))
         if not [obj for obj in bpy.context.scene.objects if obj.type == "MESH" and len(obj.data.vertices) > 0]:
             raise ValueError("USDZ validation found no renderable mesh geometry")
+    if usdz_paths:
+        bpy.ops.wm.open_mainfile(filepath=str(source_path))
+    return source_path
 
 
 def create_dimensioned_pdf(payload):
@@ -1663,6 +1667,7 @@ def main():
     payload = json.loads(payload_path.read_text(encoding="utf-8"))
     mode = payload["mode"]
     output_path = Path(payload["outputPath"])
+    locked_export_source = None
     if mode == "sketch":
         create_sketch(payload)
     elif mode == "model":
@@ -1672,7 +1677,7 @@ def main():
     elif mode == "measurement_project":
         operation = payload.get("operation", "generate_model")
         if operation == "export_model":
-            export_project(payload, output_path)
+            locked_export_source = export_project(payload, output_path)
         elif operation == "dimensioned_drawings":
             create_dimensioned_pdf(payload)
         elif operation == "export_template":
@@ -1686,7 +1691,10 @@ def main():
     else:
         raise ValueError(f"Unsupported mode: {mode}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    bpy.ops.wm.save_as_mainfile(filepath=str(output_path))
+    if locked_export_source is not None:
+        shutil.copyfile(locked_export_source, output_path)
+    else:
+        bpy.ops.wm.save_as_mainfile(filepath=str(output_path))
     print(json.dumps({"ok": True, "outputPath": str(output_path)}))
 
 

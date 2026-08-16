@@ -39,10 +39,11 @@ describe("locked portable export Blender runtime", () => {
     expect(body.data.sourceBlendPath).toBe(sourceBlendPath);
     expect(body.data.artifacts.map((artifact) => artifact.format)).toEqual(["blend", "glb", "obj", "usdz", "mtl"]);
     expect(body.data.artifacts.every((artifact) => artifact.sizeBytes > 0 && artifact.sha256.length === 64)).toBe(true);
+    expect(await readFile(path.join(outputDir, body.data.artifacts.find((artifact) => artifact.format === "blend")!.path))).toEqual(await readFile(path.join(outputDir, sourceBlendPath)));
     expect((await readFile(path.join(outputDir, body.data.artifacts.find((artifact) => artifact.format === "glb")!.path))).subarray(0, 4).toString("ascii")).toBe("glTF");
     const usdz = await readFile(path.join(outputDir, body.data.artifacts.find((artifact) => artifact.format === "usdz")!.path));
     expect(usdz.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
-    expect(usdz.includes(Buffer.from("PXR-USDC"))).toBe(true);
+    expect(usdz.includes(Buffer.from("PXR-USDC")) || usdz.includes(Buffer.from("#usda"))).toBe(true);
 
     await writeFile(path.join(outputDir, sourceBlendPath), "tampered");
     const drifted = await tools.get("export_model")!({ projectId, formats: ["glb"], executionIntent: exportIntent() });

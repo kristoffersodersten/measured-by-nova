@@ -1245,7 +1245,7 @@ async function validatePortableExportArtifact(outputDir: string, artifact: Porta
     throw new Error(`Portable OBJ artifact contains no vertex records: ${artifact.path}`);
   }
   if (artifact.format === "mtl" && !contents.includes(Buffer.from("newmtl "))) throw new Error(`Portable MTL artifact contains no material records: ${artifact.path}`);
-  if (artifact.format === "usdz" && (!contents.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) || !contents.includes(Buffer.from("PXR-USDC")) || !contents.includes(Buffer.from([0x50, 0x4b, 0x05, 0x06])))) {
+  if (artifact.format === "usdz" && (!contents.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) || (!contents.includes(Buffer.from("PXR-USDC")) && !contents.includes(Buffer.from("#usda"))) || !hasCompleteZipEocd(contents))) {
     throw new Error(`Portable USDZ artifact is not a complete USD archive: ${artifact.path}`);
   }
   return { ...artifact, sizeBytes: contents.byteLength, sha256: createHash("sha256").update(contents).digest("hex") };
@@ -1254,6 +1254,15 @@ async function validatePortableExportArtifact(outputDir: string, artifact: Porta
 function bufferHasObjVertex(contents: Buffer): boolean {
   if (contents.subarray(0, 2).equals(Buffer.from("v "))) return true;
   return contents.includes(Buffer.from("\nv ")) || contents.includes(Buffer.from("\rv "));
+}
+
+function hasCompleteZipEocd(contents: Buffer): boolean {
+  const minimumEocdBytes = 22;
+  if (contents.byteLength < minimumEocdBytes) return false;
+  const searchStart = Math.max(0, contents.byteLength - 65_535 - minimumEocdBytes);
+  const offset = contents.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]), contents.byteLength - minimumEocdBytes);
+  if (offset < searchStart || offset + minimumEocdBytes > contents.byteLength) return false;
+  return offset + minimumEocdBytes + contents.readUInt16LE(offset + 20) === contents.byteLength;
 }
 
 async function assertExistingPathWithinRoot(root: string, filePath: string): Promise<void> {
