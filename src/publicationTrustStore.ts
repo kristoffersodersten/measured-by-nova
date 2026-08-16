@@ -91,7 +91,7 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
     await assertWithinRoot(packageDirectory, artifactPath);
     const hash = createHash("sha256");
     let observedSizeBytes = 0;
-    for await (const chunk of createReadStream(artifactPath)) { hash.update(chunk); observedSizeBytes += chunk.length; }
+    for await (const chunk of createReadStream(artifactPath) as AsyncIterable<Buffer>) { hash.update(chunk); observedSizeBytes += chunk.length; }
     artifacts.push({ path: relative, observedSha256: hash.digest("hex"), observedSizeBytes });
   }
   let publicKey: KeyObject | undefined;
