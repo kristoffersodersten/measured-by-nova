@@ -188,6 +188,7 @@ async function isKeyRevoked(config: BlenderConfig, keyId: string): Promise<boole
     return registry.revokedKeyIds.includes(keyId);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    if (error instanceof Error && ["publication_trust_path_escape", "publication_trust_path_invalid"].includes(error.message)) throw error;
     throw new Error("publication_trust_revocation_registry_invalid");
   }
 }
