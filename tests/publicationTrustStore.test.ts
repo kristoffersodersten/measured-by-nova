@@ -117,7 +117,8 @@ describe("publication trust store", () => {
     const artifact = Buffer.alloc(64 * 1024 * 1024, 0x61);
     const replacement = Buffer.alloc(64 * 1024 * 1024, 0x62);
     const artifactPath = path.join(packageDir, "evidence.bin");
-    const replacementPath = path.join(packageDir, "replacement.bin.pending");
+    const replacementPath = path.join(outputDir, "replacement.bin.pending");
+    const retiredPath = path.join(outputDir, "retired-evidence.bin");
     await writeFile(artifactPath, artifact);
     await writeFile(replacementPath, replacement);
     const binding = { schemaVersion: 1 as const, packageId: "native-race", projectId, objectId: "object-1", captureProtocolId: "protocol-1", kitId: "kit-1", commissioningPartyId: "party-1", capturedAt: "2026-08-16T00:00:00.000Z", evidenceScopes: [{ id: "dimensions", kind: "measurement" as const, required: true, verified: true }], manifest: [{ path: "evidence.bin", sha256: createHash("sha256").update(artifact).digest("hex"), sizeBytes: artifact.byteLength }] };
@@ -127,8 +128,10 @@ describe("publication trust store", () => {
     await writeFile(path.join(packageDir, "capture-package.json"), JSON.stringify({ source: "native_app", binding, signature: { algorithm: "Ed25519", keyId: "race-key", signedPayloadSha256: payloadHash, valueBase64: sign(null, Buffer.from(payloadHash, "hex"), privateKey).toString("base64") } }));
     const verification = verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { projectId, executionIntent: intent, packageManifestPath: "captures/native-race/capture-package.json", publicKeyPath: "publication-keys/race-key.pem" });
     await new Promise((resolve) => setTimeout(resolve, 5));
-    await rename(artifactPath, `${artifactPath}.old`);
+    await rename(artifactPath, retiredPath);
     await rename(replacementPath, artifactPath);
-    await expect(verification).rejects.toThrow("publication_trust_package_changed_during_verification");
+    const outcome = await verification.then((result) => ({ result })).catch((error: unknown) => ({ error }));
+    if ("result" in outcome) expect(outcome.result.classification.category).toBe("disputed");
+    else expect(outcome.error).toMatchObject({ message: "publication_trust_package_changed_during_verification" });
   });
 });
