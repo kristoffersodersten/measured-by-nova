@@ -180,8 +180,10 @@ async function assertDedicatedPackageDirectory(outputRoot: string, packageDirect
   if (!relativeDirectory || relativeDirectory.startsWith("..") || !topLevel || ["measurement-projects", "publication-keys", "release", "evidence"].includes(topLevel)) throw new Error("publication_trust_package_root_reserved");
 }
 async function isKeyRevoked(config: BlenderConfig, keyId: string): Promise<boolean> {
+  const keyRoot = safeOutputPath(config.outputDir, "publication-keys");
   const registryPath = safeOutputPath(config.outputDir, path.join("publication-keys", "revoked-key-ids.json"));
   try {
+    await assertWithinRoot(keyRoot, registryPath);
     const registry = RevokedKeyRegistrySchema.parse(JSON.parse(await readFile(registryPath, "utf8")));
     return registry.revokedKeyIds.includes(keyId);
   } catch (error) {
