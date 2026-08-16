@@ -252,6 +252,8 @@ measurement or material claim, and an empty condition list is explicitly not
 represented as proof that defects are absent. All displayed values pass strict
 bounded schemas and HTML escaping; a disputed live package or operator hold
 removes the entire evidence section.
+Project rows without an exact signed scope-ID binding remain visibly
+`reference` even when the package-level category is Verified.
 
 All accepted Environment Truth fields, including data scope and any fallback
 cause/primary failure, remain visible. Operator holds are explicit,
