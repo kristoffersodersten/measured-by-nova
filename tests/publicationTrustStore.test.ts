@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -81,5 +81,11 @@ describe("publication trust store", () => {
     expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.classification.category).toBe("disputed");
     await expect(verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { projectId, executionIntent: intent, packageManifestPath: `measurement-projects/${projectId}/capture-package.json` })).rejects.toThrow("publication_trust_package_root_reserved");
     await expect(verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { projectId, executionIntent: intent, packageManifestPath: `./measurement-projects/${projectId}/capture-package.json` })).rejects.toThrow("publication_trust_package_root_reserved");
+    const externalRoot = await mkdtemp(path.join(os.tmpdir(), "publication-project-root-"));
+    const projectsRoot = path.join(outputDir, "measurement-projects");
+    const movedProjectsRoot = path.join(externalRoot, "measurement-projects");
+    await rename(projectsRoot, movedProjectsRoot);
+    await symlink(movedProjectsRoot, projectsRoot);
+    await expect(verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { projectId, executionIntent: intent, packageManifestPath: "captures/manual-1/capture-package.json" })).rejects.toThrow("publication_trust_project_path_escape");
   });
 });

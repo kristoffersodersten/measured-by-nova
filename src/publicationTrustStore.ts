@@ -1,6 +1,6 @@
 import { createHash, createPublicKey, randomUUID, type KeyObject } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, opendir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
@@ -98,7 +98,6 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
   const packageDirectory = path.dirname(manifestPath);
   await assertDedicatedPackageDirectory(config.outputDir, packageDirectory, manifestPath);
   const actual = (await listFiles(packageDirectory)).filter((entry) => entry !== path.basename(manifestPath));
-  if (actual.length > 10_000) throw new Error("publication_trust_artifact_count_exceeded");
   const artifacts: CaptureArtifactContent[] = [];
   for (const relative of actual.sort()) {
     const artifactPath = path.join(packageDirectory, relative);
@@ -137,19 +136,26 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
   return StoredPublicationTrustSchema.parse({ schemaVersion: 1, projectId: input.projectId, packageManifestPath: input.packageManifestPath, ...(input.publicKeyPath ? { publicKeyPath: input.publicKeyPath } : {}), packageManifestSha256: createHash("sha256").update(manifestBytes).digest("hex"), disputes: input.disputes, verification, classification });
 }
 
-async function listFiles(root: string, prefix = ""): Promise<string[]> {
-  const entries = await readdir(path.join(root, prefix), { withFileTypes: true });
-  const files: string[] = [];
-  for (const entry of entries) {
+async function listFiles(root: string, prefix = "", files: string[] = []): Promise<string[]> {
+  const entries = await opendir(path.join(root, prefix));
+  for await (const entry of entries) {
     const relative = path.join(prefix, entry.name);
     if (entry.isSymbolicLink()) throw new Error("publication_trust_symlink_forbidden");
-    if (entry.isDirectory()) files.push(...await listFiles(root, relative));
-    else if (entry.isFile()) files.push(relative);
+    if (entry.isDirectory()) await listFiles(root, relative, files);
+    else if (entry.isFile()) {
+      files.push(relative);
+      if (files.length > 10_000) throw new Error("publication_trust_artifact_count_exceeded");
+    } else throw new Error("publication_trust_entry_type_unsupported");
   }
   return files;
 }
 async function assertProjectIdentity(config: BlenderConfig, projectId: string): Promise<void> {
-  const project = JSON.parse(await readFile(safeOutputPath(config.outputDir, path.join("measurement-projects", projectId, "project.json")), "utf8")) as { projectId?: unknown };
+  const projectsRoot = safeOutputPath(config.outputDir, "measurement-projects");
+  const projectDirectory = safeOutputPath(config.outputDir, path.join("measurement-projects", projectId));
+  const projectPath = safeOutputPath(config.outputDir, path.join("measurement-projects", projectId, "project.json"));
+  const [canonicalOutput, canonicalProjectsRoot, canonicalProjectDirectory, canonicalProjectPath] = await Promise.all([realpath(config.outputDir), realpath(projectsRoot), realpath(projectDirectory), realpath(projectPath)]);
+  if (canonicalProjectsRoot !== path.join(canonicalOutput, "measurement-projects") || canonicalProjectDirectory !== path.join(canonicalProjectsRoot, projectId) || canonicalProjectPath !== path.join(canonicalProjectDirectory, "project.json") || !(await stat(canonicalProjectPath)).isFile()) throw new Error("publication_trust_project_path_escape");
+  const project = JSON.parse(await readFile(canonicalProjectPath, "utf8")) as { projectId?: unknown };
   if (project.projectId !== projectId) throw new Error("publication_trust_project_mismatch");
 }
 async function assertWithinRoot(root: string, target: string): Promise<void> {
