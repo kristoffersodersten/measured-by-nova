@@ -29,14 +29,14 @@ export async function listUiProjects(config: UiRuntimeConfig): Promise<string[]>
   return projects;
 }
 
-export async function loadUiProjectWorkspace(config: UiRuntimeConfig, projectId: string) {
+export async function loadUiProjectWorkspace(config: UiRuntimeConfig, projectId: string, options: { includeViewerEvidence?: boolean } = {}) {
   const project = await readUiProject(config, projectId);
   const trust = await readLivePublicationTrust(asBlenderConfig(config), projectId);
   const lock = await validateModelLock(asBlenderConfig(config), project);
   const captureReady = project.photos.length > 0 && (project.dimensions.length > 0 || project.profiles.length > 0);
   const validationPassed = captureReady && project.validation.ok && project.validation.checks.length > 0 && project.validation.sourceProjectHash === hashValidationSourceProject(project);
-  const previewEvidence = await validatedPreviewEvidence(config, project.projectId, project.artifacts.digitalViewingRenderManifest, project.artifacts.digitalViewingPreview);
-  const viewerEvidence = await validatedViewerEvidence(config, project);
+  const previewEvidence = await validatedPreviewEvidence(config, project);
+  const viewerEvidence = options.includeViewerEvidence === false ? false : await validatedViewerEvidence(config, project);
   const portableExport = await readLivePortableExportEvidence(asBlenderConfig(config), project);
   const captureTrusted = captureReady && trust !== null && trust.classification.category !== "disputed";
   const oversizedDelivery = portableExport.status === "ready" && portableExport.evidence.artifacts.some((artifact) => artifact.sizeBytes > 256 * 1024 * 1024);
@@ -68,34 +68,39 @@ export async function loadUiProjectWorkspace(config: UiRuntimeConfig, projectId:
 }
 
 export async function readUiPreviewArtifact(config: UiRuntimeConfig, projectId: string) {
-  const workspace = await loadUiProjectWorkspace(config, projectId);
+  const workspace = await loadUiProjectWorkspace(config, projectId, { includeViewerEvidence: false });
   if (workspace.operatorDecision !== null) throw new Error("workspace_delivery_held");
   if (!workspace.customerViews.previewUrl) throw new Error("workspace_preview_not_ready");
   const project = await readUiProject(config, projectId);
-  const evidence = await readValidatedPreview(config, projectId, project.artifacts.digitalViewingRenderManifest, project.artifacts.digitalViewingPreview);
+  const evidence = await readValidatedPreview(config, project);
   if (!evidence) throw new Error("workspace_preview_revalidation_failed");
-  const finalWorkspace = await loadUiProjectWorkspace(config, projectId);
+  const finalWorkspace = await loadUiProjectWorkspace(config, projectId, { includeViewerEvidence: false });
   if (!finalWorkspace.customerViews.previewUrl) throw new Error("workspace_preview_gate_changed");
   return { bytes: evidence.bytes, contentType: "image/png", sha256: evidence.sha256 };
 }
 
 export async function readUiViewerArtifact(config: UiRuntimeConfig, projectId: string, filename: string) {
   if (!(ViewerFiles as readonly string[]).includes(filename)) throw new Error("workspace_viewer_file_invalid");
-  const workspace = await loadUiProjectWorkspace(config, projectId);
+  const workspace = await loadUiProjectWorkspace(config, projectId, { includeViewerEvidence: false });
   if (workspace.operatorDecision !== null) throw new Error("workspace_delivery_held");
-  if (!workspace.customerViews.viewerUrl) throw new Error("workspace_viewer_not_ready");
+  assertCustomerBaseGate(workspace);
   const project = await readUiProject(config, projectId);
   const snapshot = await readValidatedViewerSnapshot(config, project);
   const bytes = snapshot.files.get(filename);
   if (!bytes) throw new Error("workspace_viewer_artifact_missing");
-  const finalWorkspace = await loadUiProjectWorkspace(config, projectId);
-  if (!finalWorkspace.customerViews.viewerUrl) throw new Error("workspace_viewer_gate_changed");
+  const finalWorkspace = await loadUiProjectWorkspace(config, projectId, { includeViewerEvidence: false });
+  assertCustomerBaseGate(finalWorkspace);
   return { bytes, contentType: viewerContentType(filename) };
+}
+
+function assertCustomerBaseGate(workspace: { operatorDecision: UiOperatorDecision; project: { captureReady: boolean; validationPassed: boolean; modelLockValid: boolean; publicationTrust: { category: string } | null } }): void {
+  if (workspace.operatorDecision !== null) throw new Error("workspace_delivery_held");
+  if (!workspace.project.captureReady || !workspace.project.validationPassed || !workspace.project.modelLockValid || !workspace.project.publicationTrust || workspace.project.publicationTrust.category === "disputed") throw new Error("workspace_customer_gate_not_ready");
 }
 
 export async function readUiDeliveryArtifact(config: UiRuntimeConfig, projectId: string, format: string) {
   if (!(["blend", "glb", "obj", "mtl", "usdz"] as const).includes(format as PortableExportFormat)) throw new Error("workspace_delivery_format_invalid");
-  const workspace = await loadUiProjectWorkspace(config, projectId);
+  const workspace = await loadUiProjectWorkspace(config, projectId, { includeViewerEvidence: false });
   if (workspace.operatorDecision !== null) throw new Error("workspace_delivery_held");
   const deliveryState = workspace.surface.panels[1].states.find((state) => state.id === "portable-delivery");
   if (deliveryState?.status !== "ready") throw new Error(`workspace_delivery_not_ready_${deliveryState?.blockingReason?.replace(/[^a-z_]/g, "_") ?? "pending"}`);
@@ -106,7 +111,7 @@ export async function readUiDeliveryArtifact(config: UiRuntimeConfig, projectId:
     const code = error instanceof Error ? error.message.replace(/[^a-z_]/g, "_") : "revalidation_failed";
     throw new Error(code.startsWith("workspace_") ? code : `workspace_delivery_not_ready_${code}`);
   }
-  const finalWorkspace = await loadUiProjectWorkspace(config, projectId);
+  const finalWorkspace = await loadUiProjectWorkspace(config, projectId, { includeViewerEvidence: false });
   if (finalWorkspace.operatorDecision !== null) throw new Error("workspace_delivery_held");
   if (!finalWorkspace.deliveryArtifacts.some((entry) => entry.format === format)) {
     const finalState = finalWorkspace.surface.panels[1].states.find((state) => state.id === "portable-delivery");
@@ -176,11 +181,12 @@ function uiDecisionPath(config: UiRuntimeConfig, projectId: string): string {
 
 function asBlenderConfig(config: UiRuntimeConfig): BlenderConfig { return { outputDir: config.outputDir, timeoutMs: 1 }; }
 
-async function validatedPreviewEvidence(config: UiRuntimeConfig, projectId: string, manifestRelative: string | undefined, renderRelative: string | undefined): Promise<boolean> {
-  return (await readValidatedPreview(config, projectId, manifestRelative, renderRelative)) !== null;
+async function validatedPreviewEvidence(config: UiRuntimeConfig, project: Awaited<ReturnType<typeof readUiProject>>): Promise<boolean> {
+  return (await readValidatedPreview(config, project)) !== null;
 }
 
-async function readValidatedPreview(config: UiRuntimeConfig, projectId: string, manifestRelative: string | undefined, renderRelative: string | undefined): Promise<{ bytes: Buffer; sha256: string } | null> {
+async function readValidatedPreview(config: UiRuntimeConfig, project: Awaited<ReturnType<typeof readUiProject>>): Promise<{ bytes: Buffer; sha256: string } | null> {
+  const manifestRelative = project.artifacts.digitalViewingRenderManifest; const renderRelative = project.artifacts.digitalViewingPreview;
   if (!manifestRelative || !renderRelative || !renderRelative.toLowerCase().endsWith(".png")) return null;
   try {
     const manifestPath = safeOutputPath(config.outputDir, manifestRelative);
@@ -189,9 +195,12 @@ async function readValidatedPreview(config: UiRuntimeConfig, projectId: string, 
     const renderContents = await readCanonicalStableFile(config.outputDir, renderPath, 256 * 1024 * 1024);
     const manifest = DigitalViewingRenderManifestSchema.parse(JSON.parse(manifestBytes.toString("utf8")));
     const sha256 = createHash("sha256").update(renderContents).digest("hex");
-    const valid = manifest.projectId === projectId
+    const valid = manifest.projectId === project.projectId
       && manifest.artifacts.manifest === manifestRelative
       && manifest.artifacts.render === renderRelative
+      && manifest.blenderExecution?.sourceBlendPath === project.modelLock.modelArtifact
+      && project.artifacts.digitalViewingPreviewModelHash === project.modelLock.modelHash
+      && project.artifacts.digitalViewingPreviewSourceProjectHash === project.modelLock.sourceProjectHash
       && renderContents.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
       && manifest.blenderExecution?.renderArtifact?.sha256 === sha256;
     return valid ? { bytes: renderContents, sha256 } : null;

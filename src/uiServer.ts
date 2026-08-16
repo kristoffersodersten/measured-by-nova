@@ -77,7 +77,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
 }
 
 function setSecurityHeaders(response: ServerResponse): void {
-  response.setHeader("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+  response.setHeader("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; img-src 'self' blob: data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
   response.setHeader("referrer-policy", "no-referrer"); response.setHeader("x-content-type-options", "nosniff"); response.setHeader("cache-control", "no-store");
 }
 

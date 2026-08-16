@@ -729,7 +729,7 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
       await removeRelativePaths(config.outputDir, renderOutputs);
       return fail(req, "digital_viewing_render_artifact_invalid", error instanceof Error ? error.message : String(error), ["All partial preview artifacts were removed."]);
     }
-    const nextProject = { ...project, artifacts: { ...project.artifacts, digitalViewingPreview: executedManifest.artifacts.render, digitalViewingRenderManifest: executedManifest.artifacts.manifest } };
+    const nextProject = { ...project, artifacts: { ...project.artifacts, digitalViewingPreview: executedManifest.artifacts.render, digitalViewingRenderManifest: executedManifest.artifacts.manifest, digitalViewingPreviewModelHash: project.modelLock.modelHash!, digitalViewingPreviewSourceProjectHash: project.modelLock.sourceProjectHash! } };
     await writeProject(config, nextProject);
     await appendRequestLog(config, payload.capture.projectId, req, "render_digital_viewing_preview", {
       captureId: payload.capture.captureId,
