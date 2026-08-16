@@ -105,4 +105,30 @@ describe("publication trust store", () => {
     await symlink(movedProjectsRoot, projectsRoot);
     await expect(verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { projectId, executionIntent: intent, packageManifestPath: "captures/manual-1/capture-package.json" })).rejects.toThrow("publication_trust_project_path_escape");
   });
+
+  it("never publishes verified trust while an artifact pathname is replaced", async () => {
+    const outputDir = await mkdtemp(path.join(os.tmpdir(), "publication-race-"));
+    const projectId = "race-project";
+    const packageDir = path.join(outputDir, "captures", "native-race");
+    await mkdir(path.join(outputDir, "measurement-projects", projectId), { recursive: true });
+    await mkdir(path.join(outputDir, "publication-keys"));
+    await mkdir(packageDir, { recursive: true });
+    await writeFile(path.join(outputDir, "measurement-projects", projectId, "project.json"), JSON.stringify({ projectId }));
+    const artifact = Buffer.alloc(64 * 1024 * 1024, 0x61);
+    const replacement = Buffer.alloc(64 * 1024 * 1024, 0x62);
+    const artifactPath = path.join(packageDir, "evidence.bin");
+    const replacementPath = path.join(packageDir, "replacement.bin.pending");
+    await writeFile(artifactPath, artifact);
+    await writeFile(replacementPath, replacement);
+    const binding = { schemaVersion: 1 as const, packageId: "native-race", projectId, objectId: "object-1", captureProtocolId: "protocol-1", kitId: "kit-1", commissioningPartyId: "party-1", capturedAt: "2026-08-16T00:00:00.000Z", evidenceScopes: [{ id: "dimensions", kind: "measurement" as const, required: true, verified: true }], manifest: [{ path: "evidence.bin", sha256: createHash("sha256").update(artifact).digest("hex"), sizeBytes: artifact.byteLength }] };
+    const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+    const payloadHash = capturePackagePayloadSha256(binding);
+    await writeFile(path.join(outputDir, "publication-keys", "race-key.pem"), publicKey.export({ type: "spki", format: "pem" }));
+    await writeFile(path.join(packageDir, "capture-package.json"), JSON.stringify({ source: "native_app", binding, signature: { algorithm: "Ed25519", keyId: "race-key", signedPayloadSha256: payloadHash, valueBase64: sign(null, Buffer.from(payloadHash, "hex"), privateKey).toString("base64") } }));
+    const verification = verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { projectId, executionIntent: intent, packageManifestPath: "captures/native-race/capture-package.json", publicKeyPath: "publication-keys/race-key.pem" });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await rename(artifactPath, `${artifactPath}.old`);
+    await rename(replacementPath, artifactPath);
+    await expect(verification).rejects.toThrow("publication_trust_package_changed_during_verification");
+  });
 });

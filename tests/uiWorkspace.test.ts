@@ -99,7 +99,9 @@ describe("executable Measured workspace", () => {
     const projectDir = path.join(outputDir, "measurement-projects", fixture.projectId);
     await mkdir(projectDir, { recursive: true });
     await writeFile(path.join(projectDir, "project.json"), JSON.stringify(validated), "utf8");
-    expect((await loadUiProjectWorkspace(config(outputDir), fixture.projectId)).project.validationPassed).toBe(true);
+    const trustedWorkspace = await loadUiProjectWorkspace(config(outputDir), fixture.projectId);
+    expect(trustedWorkspace.project.validationPassed).toBe(true);
+    expect(trustedWorkspace.surface.panels[0]?.states[0]).toMatchObject({ status: "blocked", blockingReason: "Verify an explicit native or manual capture package before publication." });
     const mutated = { ...validated, assumptions: [...validated.assumptions, { id: "late-change", text: "Changed after validation", confidence: "medium" as const, source: "user_declared" as const, affectsGeometry: false }] };
     await writeFile(path.join(projectDir, "project.json"), JSON.stringify(mutated), "utf8");
     expect((await loadUiProjectWorkspace(config(outputDir), fixture.projectId)).project.validationPassed).toBe(false);

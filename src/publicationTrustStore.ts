@@ -1,6 +1,6 @@
 import { createHash, createPublicKey, randomUUID, type KeyObject } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { opendir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { constants, type BigIntStats } from "node:fs";
+import { open, opendir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { lock } from "proper-lockfile";
 import { z } from "zod";
@@ -116,11 +116,11 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
   for (const relative of actual.sort()) {
     const artifactPath = path.join(packageDirectory, relative);
     await assertWithinRoot(packageDirectory, artifactPath);
-    const hash = createHash("sha256");
-    let observedSizeBytes = 0;
-    for await (const chunk of createReadStream(artifactPath) as AsyncIterable<Buffer>) { hash.update(chunk); observedSizeBytes += chunk.length; }
-    artifacts.push({ path: relative, observedSha256: hash.digest("hex"), observedSizeBytes });
+    artifacts.push({ path: relative, ...await hashStableArtifact(artifactPath) });
   }
+  const finalActual = (await listFiles(packageDirectory)).filter((entry) => entry !== path.basename(manifestPath)).sort();
+  if (finalActual.length !== actual.length || finalActual.some((entry, index) => entry !== actual.sort()[index])) throw new Error("publication_trust_package_changed_during_verification");
+  if (createHash("sha256").update(await readFile(manifestPath)).digest("hex") !== createHash("sha256").update(manifestBytes).digest("hex")) throw new Error("publication_trust_package_changed_during_verification");
   let publicKey: KeyObject | undefined;
   let keyRevoked = false;
   if (capturePackage.source === "native_app") {
@@ -148,6 +148,25 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
     ? { ...classified, category: "disputed" as const, disputedScopeIds: [...new Set([...classified.disputedScopeIds, ...capturePackage.binding.evidenceScopes.map((scope) => scope.id)])].sort() }
     : classified;
   return StoredPublicationTrustSchema.parse({ schemaVersion: 1, projectId: input.projectId, packageManifestPath: input.packageManifestPath, ...(input.publicKeyPath ? { publicKeyPath: input.publicKeyPath } : {}), packageManifestSha256: createHash("sha256").update(manifestBytes).digest("hex"), disputes: input.disputes, verification, classification });
+}
+
+async function hashStableArtifact(artifactPath: string): Promise<Pick<CaptureArtifactContent, "observedSha256" | "observedSizeBytes">> {
+  const beforePath = await stat(artifactPath, { bigint: true });
+  const handle = await open(artifactPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const beforeHandle = await handle.stat({ bigint: true });
+    if (!sameFileState(beforePath, beforeHandle)) throw new Error("publication_trust_package_changed_during_verification");
+    const hash = createHash("sha256");
+    let observedSizeBytes = 0;
+    for await (const chunk of handle.createReadStream({ autoClose: false }) as AsyncIterable<Buffer>) { hash.update(chunk); observedSizeBytes += chunk.length; }
+    const [afterHandle, afterPath] = await Promise.all([handle.stat({ bigint: true }), stat(artifactPath, { bigint: true })]);
+    if (!sameFileState(beforeHandle, afterHandle) || !sameFileState(afterHandle, afterPath)) throw new Error("publication_trust_package_changed_during_verification");
+    return { observedSha256: hash.digest("hex"), observedSizeBytes };
+  } finally { await handle.close(); }
+}
+
+function sameFileState(left: BigIntStats, right: BigIntStats): boolean {
+  return left.dev === right.dev && left.ino === right.ino && left.size === right.size && left.mtimeNs === right.mtimeNs && left.ctimeNs === right.ctimeNs;
 }
 
 async function listFiles(root: string, prefix = "", files: string[] = [], traversal = { entries: 0 }): Promise<string[]> {
