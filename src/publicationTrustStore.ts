@@ -38,23 +38,26 @@ const StoredPublicationTrustSchema = z.object({
   classification: z.object({ category: z.enum(["verified", "partially_verified", "reference", "disputed"]), verifiedScopeIds: z.array(z.string()), unverifiedRequiredScopeIds: z.array(z.string()), disputedScopeIds: z.array(z.string()) }).strict()
 }).strict();
 export type StoredPublicationTrust = z.infer<typeof StoredPublicationTrustSchema>;
+const projectTrustWriteTails = new Map<string, Promise<void>>();
 
 export async function verifyAndStorePublicationTrust(config: BlenderConfig, input: unknown): Promise<StoredPublicationTrust> {
   const payload = VerifyPublicationCaptureInputSchema.parse(input);
-  const existing = await readStoredPublicationTrust(config, payload.projectId);
-  const disputes = [...new Map([...(existing?.disputes ?? []), ...payload.disputes].map((dispute) => [dispute.scopeId, dispute])).values()];
-  const evaluated = await evaluatePublicationTrust(config, { ...payload, disputes });
   const evidencePath = trustEvidencePath(config, payload.projectId);
-  await assertProjectIdentity(config, payload.projectId);
-  const temporary = `${evidencePath}.tmp-${randomUUID()}`;
-  try {
-    await writeFile(temporary, `${JSON.stringify(evaluated, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
-    await rename(temporary, evidencePath);
-  } catch (error) {
-    await rm(temporary, { force: true });
-    throw error;
-  }
-  return evaluated;
+  return await withProjectTrustWriteLock(evidencePath, async () => {
+    const existing = await readStoredPublicationTrust(config, payload.projectId);
+    const disputes = [...new Map([...(existing?.disputes ?? []), ...payload.disputes].map((dispute) => [dispute.scopeId, dispute])).values()];
+    const evaluated = await evaluatePublicationTrust(config, { ...payload, disputes });
+    await assertProjectIdentity(config, payload.projectId);
+    const temporary = `${evidencePath}.tmp-${randomUUID()}`;
+    try {
+      await writeFile(temporary, `${JSON.stringify(evaluated, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
+      await rename(temporary, evidencePath);
+    } catch (error) {
+      await rm(temporary, { force: true });
+      throw error;
+    }
+    return evaluated;
+  });
 }
 
 export async function readLivePublicationTrust(config: BlenderConfig, projectId: string): Promise<StoredPublicationTrust | null> {
@@ -171,6 +174,19 @@ async function readStoredPublicationTrust(config: BlenderConfig, projectId: stri
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     if (error instanceof Error && error.message === "publication_trust_project_mismatch") throw error;
     throw new Error("publication_trust_evidence_invalid");
+  }
+}
+async function withProjectTrustWriteLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
+  const previous = projectTrustWriteTails.get(key) ?? Promise.resolve();
+  let release = (): void => undefined;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const tail = previous.then(() => gate);
+  projectTrustWriteTails.set(key, tail);
+  await previous;
+  try { return await operation(); }
+  finally {
+    release();
+    if (projectTrustWriteTails.get(key) === tail) projectTrustWriteTails.delete(key);
   }
 }
 function trustEvidencePath(config: BlenderConfig, projectId: string): string { return safeOutputPath(config.outputDir, path.join("measurement-projects", projectId, ".publication-trust.json")); }

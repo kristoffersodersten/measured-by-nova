@@ -31,8 +31,11 @@ describe("publication trust store", () => {
     await writeFile(path.join(packageDir, "capture-package.json"), JSON.stringify(packageDocument, null, 2));
     expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.classification.category).toBe("disputed");
     await writeFile(path.join(packageDir, "capture-package.json"), packageBytes);
-    expect((await verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { ...input, disputes: [{ scopeId: "dimensions", status: "open", reason: "Operator dispute remains open." }] })).classification.category).toBe("disputed");
-    expect((await verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, input)).classification.category).toBe("disputed");
+    await Promise.all([
+      verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { ...input, disputes: [{ scopeId: "dimensions", status: "open", reason: "Operator dispute remains open." }] }),
+      verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, input)
+    ]);
+    expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.classification).toMatchObject({ category: "disputed", verifiedScopeIds: ["dimensions"], disputedScopeIds: ["dimensions"] });
     await writeFile(path.join(packageDir, "evidence.json"), "mutated");
     expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.classification.category).toBe("disputed");
     await rm(path.join(packageDir, "evidence.json"));

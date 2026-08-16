@@ -75,7 +75,7 @@ describe("publication trust contract", () => {
     expect(classifyPublicTrust({
       capturePackage,
       packageVerification: verification
-    }).category).toBe("reference");
+    })).toMatchObject({ category: "reference", verifiedScopeIds: [], unverifiedRequiredScopeIds: ["dimensions", "materials"] });
   });
 
   it("keeps manual uploads as reference regardless of verified evidence declarations", () => {

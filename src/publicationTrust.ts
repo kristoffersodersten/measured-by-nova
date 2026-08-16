@@ -226,9 +226,10 @@ export function classifyPublicTrust(input: {
   const capturePackage = PublicationCapturePackageSchema.parse(input.capturePackage);
   const scopes = capturePackage.binding.evidenceScopes;
   const disputes = z.array(PublicationDisputeSchema).parse(input.disputes ?? []);
-  const verifiedScopeIds = scopes.filter((scope) => scope.verified).map((scope) => scope.id).sort();
+  const claimsAuthenticated = capturePackage.source === "native_app" && input.packageVerification.valid;
+  const verifiedScopeIds = claimsAuthenticated ? scopes.filter((scope) => scope.verified).map((scope) => scope.id).sort() : [];
   const unverifiedRequiredScopeIds = scopes
-    .filter((scope) => scope.required && !scope.verified)
+    .filter((scope) => scope.required && (!claimsAuthenticated || !scope.verified))
     .map((scope) => scope.id)
     .sort();
   const disputedScopeIds = [...new Set(disputes.map((dispute) => dispute.scopeId))].sort();
