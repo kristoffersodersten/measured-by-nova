@@ -8,7 +8,7 @@ import { MeasurementProjectSchema } from "./measurementContracts.js";
 import { DigitalViewingRenderManifestSchema } from "./digitalViewingContracts.js";
 import { buildExecutableWorkspace, type UiRuntimeConfig } from "./uiWorkspace.js";
 import { readLivePublicationTrust } from "./publicationTrustStore.js";
-import { readLivePortableExportEvidence } from "./portableExportEvidence.js";
+import { readLivePortableExportEvidence, readVerifiedPortableExportArtifact, type PortableExportFormat } from "./portableExportEvidence.js";
 
 export type UiOperatorDecision = { decision: "hold"; actor: "operator"; projectId: string } | null;
 
@@ -34,11 +34,13 @@ export async function loadUiProjectWorkspace(config: UiRuntimeConfig, projectId:
   const previewEvidence = await validatedPreviewEvidence(config, project.projectId, project.artifacts.digitalViewingRenderManifest, project.artifacts.digitalViewingPreview);
   const portableExport = await readLivePortableExportEvidence(asBlenderConfig(config), project);
   const captureTrusted = captureReady && trust !== null && trust.classification.category !== "disputed";
+  const oversizedDelivery = portableExport.status === "ready" && portableExport.evidence.artifacts.some((artifact) => artifact.sizeBytes > 256 * 1024 * 1024);
   const deliveryBlockingReason = !captureTrusted
     ? trust?.classification.category === "disputed" ? "capture_trust_disputed" : "capture_trust_incomplete"
     : !validationPassed ? "project_validation_not_passing"
     : !lock.ok ? "model_lock_invalid"
     : portableExport.status === "blocked" ? portableExport.code
+    : oversizedDelivery ? "workspace_delivery_artifact_too_large"
     : undefined;
   const surface = buildExecutableWorkspace(config);
   surface.panels[0].states = [
@@ -50,7 +52,32 @@ export async function loadUiProjectWorkspace(config: UiRuntimeConfig, projectId:
     { id: "model-lock", label: lock.ok ? "Reviewed model lock verified" : "Reviewed model lock invalid", topology: "human-intervention", status: lock.ok ? "ready" : "blocked", provenance: project.modelLock.modelArtifact ?? "model-lock-contract", ...(lock.ok ? {} : { blockingReason: lock.blocking.map((reason) => reason.code).join(", ") }), operatorApprovalRequired: true }
   ];
   surface.panels[2].states = [{ id: "preview", label: surface.outputTruth.previewLabel, topology: "system", status: previewEvidence ? "ready" : "pending", ...(previewEvidence ? { confidence: "medium" as const } : {}), provenance: previewEvidence ? "validated-render-manifest" : "preview-render-manifest", operatorApprovalRequired: false }];
-  return { surface, operatorDecision: await readDecision(config, projectId), project: { projectId, modelLockValid: lock.ok, validationPassed, captureReady, publicationTrust: trust?.classification ?? null, portableExport: portableExport.status } };
+  const operatorDecision = await readDecision(config, projectId);
+  const deliveryReady = !deliveryBlockingReason && portableExport.status === "ready";
+  const deliveryArtifacts = deliveryReady && operatorDecision === null ? portableExport.evidence.artifacts.map((artifact) => ({ format: artifact.format, sizeBytes: artifact.sizeBytes, url: `/api/delivery-artifact?projectId=${encodeURIComponent(projectId)}&format=${artifact.format}` })) : [];
+  return { surface, operatorDecision, deliveryArtifacts, project: { projectId, modelLockValid: lock.ok, validationPassed, captureReady, publicationTrust: trust?.classification ?? null, portableExport: portableExport.status } };
+}
+
+export async function readUiDeliveryArtifact(config: UiRuntimeConfig, projectId: string, format: string) {
+  if (!(["blend", "glb", "obj", "mtl", "usdz"] as const).includes(format as PortableExportFormat)) throw new Error("workspace_delivery_format_invalid");
+  const workspace = await loadUiProjectWorkspace(config, projectId);
+  if (workspace.operatorDecision !== null) throw new Error("workspace_delivery_held");
+  const deliveryState = workspace.surface.panels[1].states.find((state) => state.id === "portable-delivery");
+  if (deliveryState?.status !== "ready") throw new Error(`workspace_delivery_not_ready_${deliveryState?.blockingReason?.replace(/[^a-z_]/g, "_") ?? "pending"}`);
+  const project = await readUiProject(config, projectId);
+  let artifact;
+  try { artifact = await readVerifiedPortableExportArtifact(asBlenderConfig(config), project, format as PortableExportFormat); }
+  catch (error) {
+    const code = error instanceof Error ? error.message.replace(/[^a-z_]/g, "_") : "revalidation_failed";
+    throw new Error(code.startsWith("workspace_") ? code : `workspace_delivery_not_ready_${code}`);
+  }
+  const finalWorkspace = await loadUiProjectWorkspace(config, projectId);
+  if (finalWorkspace.operatorDecision !== null) throw new Error("workspace_delivery_held");
+  if (!finalWorkspace.deliveryArtifacts.some((entry) => entry.format === format)) {
+    const finalState = finalWorkspace.surface.panels[1].states.find((state) => state.id === "portable-delivery");
+    throw new Error(`workspace_delivery_not_ready_${finalState?.blockingReason?.replace(/[^a-z_]/g, "_") ?? "gate_changed"}`);
+  }
+  return artifact;
 }
 
 function displayTrustCategory(category: string): string { return category.split("_").map((part) => part[0]?.toUpperCase() + part.slice(1)).join(" "); }

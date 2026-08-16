@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildExecutableWorkspace, renderWorkspaceHtml, UiRuntimeConfigSchema, type UiRuntimeConfig } from "./uiWorkspace.js";
-import { listUiProjects, loadUiProjectWorkspace, writeUiDecision } from "./uiProjectState.js";
+import { listUiProjects, loadUiProjectWorkspace, readUiDeliveryArtifact, writeUiDecision } from "./uiProjectState.js";
 
 export function startUiServer(config: UiRuntimeConfig) {
   const parsed = UiRuntimeConfigSchema.parse(config);
@@ -24,7 +24,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
   if (request.method === "GET" && url.pathname === "/") {
     const projectId = url.searchParams.get("projectId");
     if (!projectId) return send(response, 200, "text/html; charset=utf-8", renderWorkspaceHtml(buildExecutableWorkspace(config)));
-    try { const workspace = await loadUiProjectWorkspace(config, projectId); return send(response, 200, "text/html; charset=utf-8", renderWorkspaceHtml(workspace.surface, workspace.operatorDecision?.actor ?? null)); }
+    try { const workspace = await loadUiProjectWorkspace(config, projectId); return send(response, 200, "text/html; charset=utf-8", renderWorkspaceHtml(workspace.surface, workspace.operatorDecision?.actor ?? null, workspace.deliveryArtifacts)); }
     catch (error) { return send(response, 404, "application/json", JSON.stringify({ error: workspaceError(error) })); }
   }
   if (request.method === "GET" && request.url === "/workspace.js") return send(response, 200, "text/javascript; charset=utf-8", workspaceScript);
@@ -37,6 +37,15 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     if (!projectId) return send(response, 400, "application/json", JSON.stringify({ error: "workspace_project_required" }));
     try { return send(response, 200, "application/json", JSON.stringify(await loadUiProjectWorkspace(config, projectId))); }
     catch (error) { return send(response, 404, "application/json", JSON.stringify({ error: workspaceError(error) })); }
+  }
+  if (request.method === "GET" && url.pathname === "/api/delivery-artifact") {
+    const projectId = url.searchParams.get("projectId"); const format = url.searchParams.get("format");
+    if (!projectId || !format) return send(response, 400, "application/json", JSON.stringify({ error: "workspace_delivery_parameters_required" }));
+    try {
+      const artifact = await readUiDeliveryArtifact(config, projectId, format);
+      response.statusCode = 200; response.setHeader("content-type", artifact.contentType); response.setHeader("content-length", artifact.bytes.byteLength);
+      response.setHeader("content-disposition", `attachment; filename="${artifact.filename}"`); response.setHeader("etag", `"sha256-${artifact.sha256}"`); response.end(artifact.bytes); return;
+    } catch (error) { return send(response, 409, "application/json", JSON.stringify({ error: workspaceError(error) })); }
   }
   if (request.method === "POST" && request.url === "/api/operator-decision") {
     if (!sameOrigin(request)) return send(response, 403, "application/json", JSON.stringify({ error: "operator_decision_origin_forbidden" }));
@@ -58,7 +67,7 @@ function setSecurityHeaders(response: ServerResponse): void {
   response.setHeader("referrer-policy", "no-referrer"); response.setHeader("x-content-type-options", "nosniff"); response.setHeader("cache-control", "no-store");
 }
 
-const workspaceScript = `"use strict";document.getElementById("manual-override").addEventListener("click",async()=>{const output=document.getElementById("decision");const projectId=new URLSearchParams(location.search).get("projectId");if(!projectId){output.textContent="Select an explicit project before holding delivery.";return;}try{const response=await fetch("/api/operator-decision",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({decision:"hold",actor:"operator",projectId})});const result=await response.json();output.textContent=response.ok?"Delivery held by operator.":result.error;}catch{output.textContent="Decision failed; delivery state unchanged."}});`;
+const workspaceScript = `"use strict";document.getElementById("manual-override").addEventListener("click",async()=>{const output=document.getElementById("decision");const projectId=new URLSearchParams(location.search).get("projectId");if(!projectId){output.textContent="Select an explicit project before holding delivery.";return;}try{const response=await fetch("/api/operator-decision",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({decision:"hold",actor:"operator",projectId})});const result=await response.json();if(response.ok){output.textContent="Delivery held by operator.";document.getElementById("delivery-artifacts")?.remove();const state=document.getElementById("technical-output-state");if(state)state.textContent="Delivery held · verified artifacts unavailable";}else output.textContent=result.error;}catch{output.textContent="Decision failed; delivery state unchanged."}});`;
 function send(response: ServerResponse, status: number, type: string, body: string): void { response.statusCode = status; response.setHeader("content-type", type); response.end(body); }
 function workspaceError(error: unknown): string { return error instanceof Error && /^workspace_[a-z_]+$/.test(error.message) ? error.message : "workspace_project_unavailable"; }
 function validLoopbackHost(request: IncomingMessage): boolean {
