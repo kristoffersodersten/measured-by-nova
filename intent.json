@@ -1,25 +1,20 @@
 {
-  "id": "AXIOM-20260830-CER8WC",
-  "goal": "Close Measured by Nova publication-trust and full-system production gaps through verified release evidence",
-  "linear_issue_id": "SOD-715",
-  "canonical_reference": "kristoffersodersten/measured-by-nova@63624036990aeb2911c66d69e5e7364cb1625b61",
-  "contract_target": "docs/publication-trust.md",
-  "layer": "validation",
+  "id": "AXIOM-20260830-BAFHGJ",
+  "goal": "Publish current Measured by Nova runtime as an exact-SHA verified production release",
+  "linear_issue_id": "SOD-1134",
+  "canonical_reference": "kristoffersodersten/measured-by-nova@0925369b65fa46ccf2bb28c2dcd34df9c027bbe8",
+  "contract_target": "docs/release-checklist.md",
+  "layer": "deployment",
   "acceptance_criteria": [
-    "real signed capture tooling",
-    "hostile-path tests",
-    "exact-SHA CI",
-    "reproducible release",
-    "runtime evidence",
-    "SOD-701 reconciliation"
+    "version and changelog truth",
+    "protected PR admission",
+    "exact main SHA",
+    "verified production release",
+    "downloaded artifact smoke",
+    "Linear evidence"
   ],
   "verification_method": [
-    "Hetzner pnpm lint",
-    "test",
-    "build",
-    "audit",
-    "benchmark",
-    "release:verify; GitHub quality and blender-runtime; live runtime smoke"
+    "Hetzner and GitHub audit lint build coverage Blender E2E negative paths reproducible release clean install runtime smoke"
   ],
   "constraints": [],
   "allowed_actions": [
@@ -33,8 +28,8 @@
     "main"
   ],
   "perception_targets": [],
-  "expires_at": 1788711154,
-  "nonce": "9defdf25-d677-4ba2-a1fd-1bb87cc8edae",
+  "expires_at": 1788713126,
+  "nonce": "2f3213ac-203d-4e21-829b-f8b98286184f",
   "signer": {
     "public_key": "MCowBQYDK2VwAyEAqVq6w6JT3xe8AZydV7bto90lPToV8GqmeCmxG09zlgU=",
     "role": "agent"
@@ -42,7 +37,7 @@
   "signature": {
     "algorithm": "ed25519",
     "public_key": "MCowBQYDK2VwAyEAqVq6w6JT3xe8AZydV7bto90lPToV8GqmeCmxG09zlgU=",
-    "value": "Yb9c9EzcNC7jatBOP4J5b1qGy08NT2KXsNHXbNiRe/kV+GX2NOpBInVxTaDY0grI+13N20SVfNO+LEt2tsz9CQ==",
+    "value": "/6/6XBSvsiVT1tMoPZOFcJTJ8CV35cMorKjWU24WY2DxroSPjZrhoXP5Qe0OEmX0530xRA8jpw0prq4YnGFYDw==",
     "signed_payload_fields": [
       "id",
       "goal",
