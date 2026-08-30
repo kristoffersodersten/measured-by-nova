@@ -51,6 +51,7 @@ const CapturePackageBindingSchema = z.object({
     scopeIds.add(scope.id);
   }
 });
+export type CapturePackageBinding = z.infer<typeof CapturePackageBindingSchema>;
 
 const NativeCapturePackageSchema = z.object({
   source: z.literal("native_app"),
