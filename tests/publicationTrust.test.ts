@@ -130,4 +130,31 @@ describe("publication trust contract", () => {
   it("rejects ambiguous duplicate signed evidence scope IDs", () => {
     expect(() => PublicationCapturePackageSchema.parse({ source: "manual_upload", binding: { ...binding, evidenceScopes: [binding.evidenceScopes[0], { ...binding.evidenceScopes[0], verified: false }] } })).toThrow("Duplicate evidence scope ID");
   });
+
+  it("rejects duplicate observed artifact paths and non-canonical signature payloads", () => {
+    const { capturePackage, publicKey } = signedPackage();
+    expect(verifyPublicationCapturePackage(capturePackage, [artifact, artifact], () => publicKey))
+      .toMatchObject({ valid: false, codes: ["artifact_duplicate"] });
+    expect(() => PublicationCapturePackageSchema.parse({
+      ...capturePackage,
+      signature: { ...capturePackage.signature, valueBase64: "not base64!!" }
+    })).toThrow();
+    expect(() => PublicationCapturePackageSchema.parse({
+      ...capturePackage,
+      signature: { ...capturePackage.signature, valueBase64: "A".repeat(516) }
+    })).toThrow();
+  });
+
+  it("fails closed for a deterministic hostile signature corpus", () => {
+    const { capturePackage } = signedPackage();
+    const hostile = ["", "=", "A", "AAAA=", "AAAA===", "../secret", "\u0000", "🔥", "A".repeat(513)];
+    for (let repeat = 0; repeat < 100; repeat += 1) {
+      for (const valueBase64 of hostile) {
+        expect(() => PublicationCapturePackageSchema.parse({
+          ...capturePackage,
+          signature: { ...capturePackage.signature, valueBase64 }
+        })).toThrow();
+      }
+    }
+  });
 });
