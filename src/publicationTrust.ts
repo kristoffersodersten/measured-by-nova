@@ -20,7 +20,7 @@ export const CaptureArtifactManifestEntrySchema = z.object({
   sizeBytes: z.number().int().nonnegative()
 }).strict();
 
-const CapturePackageBindingSchema = z.object({
+export const CapturePackageBindingSchema = z.object({
   schemaVersion: z.literal(1),
   packageId: IdSchema,
   projectId: IdSchema,

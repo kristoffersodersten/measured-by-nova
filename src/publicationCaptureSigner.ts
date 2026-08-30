@@ -1,6 +1,7 @@
 import { sign, type KeyObject } from "node:crypto";
 import { z } from "zod";
 import {
+  CapturePackageBindingSchema,
   capturePackagePayloadSha256,
   PublicationCapturePackageSchema,
   type CapturePackageBinding,
@@ -19,7 +20,7 @@ export function signNativePublicationCapture(input: {
   if (input.privateKey.type !== "private" || input.privateKey.asymmetricKeyType !== "ed25519") {
     throw new Error("publication_signer_ed25519_private_key_required");
   }
-  const binding = PublicationCapturePackageSchema.parse({ source: "manual_upload", binding: input.binding }).binding;
+  const binding = CapturePackageBindingSchema.parse(input.binding);
   const signedPayloadSha256 = capturePackagePayloadSha256(binding);
   const valueBase64 = sign(null, Buffer.from(signedPayloadSha256, "hex"), input.privateKey).toString("base64");
   return PublicationCapturePackageSchema.parse({
