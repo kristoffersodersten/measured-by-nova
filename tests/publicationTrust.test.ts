@@ -133,6 +133,7 @@ describe("publication trust contract", () => {
 
   it("rejects duplicate observed artifact paths and non-canonical signature payloads", () => {
     const { capturePackage, publicKey } = signedPackage();
+    if (capturePackage.source !== "native_app") throw new Error("test_native_package_required");
     expect(verifyPublicationCapturePackage(capturePackage, [artifact, artifact], () => publicKey))
       .toMatchObject({ valid: false, codes: ["artifact_duplicate"] });
     expect(() => PublicationCapturePackageSchema.parse({
@@ -147,6 +148,7 @@ describe("publication trust contract", () => {
 
   it("fails closed for a deterministic hostile signature corpus", () => {
     const { capturePackage } = signedPackage();
+    if (capturePackage.source !== "native_app") throw new Error("test_native_package_required");
     const hostile = ["", "=", "A", "AAAA=", "AAAA===", "../secret", "\u0000", "🔥", "A".repeat(513)];
     for (let repeat = 0; repeat < 100; repeat += 1) {
       for (const valueBase64 of hostile) {
