@@ -1,0 +1,63 @@
+{
+  "id": "AXIOM-20260830-CER8WC",
+  "goal": "Close Measured by Nova publication-trust and full-system production gaps through verified release evidence",
+  "linear_issue_id": "SOD-715",
+  "canonical_reference": "kristoffersodersten/measured-by-nova@63624036990aeb2911c66d69e5e7364cb1625b61",
+  "contract_target": "docs/publication-trust.md",
+  "layer": "validation",
+  "acceptance_criteria": [
+    "real signed capture tooling",
+    "hostile-path tests",
+    "exact-SHA CI",
+    "reproducible release",
+    "runtime evidence",
+    "SOD-701 reconciliation"
+  ],
+  "verification_method": [
+    "Hetzner pnpm lint",
+    "test",
+    "build",
+    "audit",
+    "benchmark",
+    "release:verify; GitHub quality and blender-runtime; live runtime smoke"
+  ],
+  "constraints": [],
+  "allowed_actions": [
+    "**"
+  ],
+  "forbidden_actions": [
+    ".env*",
+    "**/*.pem",
+    "**/*.key",
+    "**/secrets/**",
+    "main"
+  ],
+  "perception_targets": [],
+  "expires_at": 1788711154,
+  "nonce": "9defdf25-d677-4ba2-a1fd-1bb87cc8edae",
+  "signer": {
+    "public_key": "MCowBQYDK2VwAyEAqVq6w6JT3xe8AZydV7bto90lPToV8GqmeCmxG09zlgU=",
+    "role": "agent"
+  },
+  "signature": {
+    "algorithm": "ed25519",
+    "public_key": "MCowBQYDK2VwAyEAqVq6w6JT3xe8AZydV7bto90lPToV8GqmeCmxG09zlgU=",
+    "value": "Yb9c9EzcNC7jatBOP4J5b1qGy08NT2KXsNHXbNiRe/kV+GX2NOpBInVxTaDY0grI+13N20SVfNO+LEt2tsz9CQ==",
+    "signed_payload_fields": [
+      "id",
+      "goal",
+      "linear_issue_id",
+      "canonical_reference",
+      "contract_target",
+      "layer",
+      "acceptance_criteria",
+      "verification_method",
+      "constraints",
+      "allowed_actions",
+      "forbidden_actions",
+      "perception_targets",
+      "expires_at",
+      "nonce"
+    ]
+  }
+}

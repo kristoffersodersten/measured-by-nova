@@ -20,7 +20,7 @@ export const CaptureArtifactManifestEntrySchema = z.object({
   sizeBytes: z.number().int().nonnegative()
 }).strict();
 
-const CapturePackageBindingSchema = z.object({
+export const CapturePackageBindingSchema = z.object({
   schemaVersion: z.literal(1),
   packageId: IdSchema,
   projectId: IdSchema,
@@ -51,6 +51,7 @@ const CapturePackageBindingSchema = z.object({
     scopeIds.add(scope.id);
   }
 });
+export type CapturePackageBinding = z.infer<typeof CapturePackageBindingSchema>;
 
 const NativeCapturePackageSchema = z.object({
   source: z.literal("native_app"),
@@ -59,7 +60,7 @@ const NativeCapturePackageSchema = z.object({
     algorithm: z.literal("Ed25519"),
     keyId: IdSchema,
     signedPayloadSha256: Sha256Schema,
-    valueBase64: z.string().min(1)
+    valueBase64: z.string().min(1).max(512).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/)
   }).strict()
 }).strict();
 
@@ -83,6 +84,7 @@ export interface CaptureArtifactContent {
 
 export const CapturePackageVerificationCodeSchema = z.enum([
   "manual_upload",
+  "artifact_duplicate",
   "artifact_missing",
   "artifact_unexpected",
   "artifact_size_mismatch",
@@ -137,6 +139,9 @@ export function verifyPublicationCapturePackage(
   const capturePackage = PublicationCapturePackageSchema.parse(packageInput);
   const codes: CapturePackageVerificationCode[] = [];
   const artifactByPath = new Map(artifacts.map((artifact) => [artifact.path, artifact]));
+  if (artifactByPath.size !== artifacts.length) {
+    codes.push("artifact_duplicate");
+  }
   const manifestPaths = new Set(capturePackage.binding.manifest.map((entry) => entry.path));
 
   for (const entry of capturePackage.binding.manifest) {

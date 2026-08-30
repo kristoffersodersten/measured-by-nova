@@ -36,6 +36,15 @@ that identity. To revoke a key, atomically write
 keys are revoked; a malformed registry fails closed. Existing evidence signed
 by a revoked key cannot be revalidated or upgraded.
 
+The native signer boundary is `signNativePublicationCapture`. It accepts an
+already unlocked local Ed25519 private `KeyObject`; it does not discover keys,
+read key files, export private bytes, or provide cloud signing. A native adapter
+must obtain explicit user consent and unlock the key through the platform
+Keychain, pass the non-exported handle for one operation, then release it. The
+result contains only the canonical binding, payload hash, key ID, algorithm and
+signature. The production verifier independently resolves the approved public
+key and rejects any binding mutation after signing.
+
 Manual uploads have no path to `Measured Verified`; they are always
 `Measured Reference`.
 
