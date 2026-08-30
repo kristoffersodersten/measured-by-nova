@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ProductMetadata } from "./productMetadata.js";
 
 export const CapabilityManifestSchema = z.object({
   schemaVersion: z.literal(1),
@@ -65,7 +66,7 @@ export type CapabilityDecision = z.infer<typeof CapabilityDecisionSchema>;
 
 export const DefaultCapabilityManifest = CapabilityManifestSchema.parse({
   schemaVersion: 1,
-  bridgeVersion: "0.1.0",
+  bridgeVersion: ProductMetadata.version,
   blender: {
     minVersion: "4.0.0"
   },

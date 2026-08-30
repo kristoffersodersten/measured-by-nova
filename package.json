@@ -1,6 +1,6 @@
 {
   "name": "nova-measured",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Measured by Nova: local spatial reconstruction framework for physically accurate Blender models from measurements, structured photos, and materials.",
   "type": "module",
   "license": "MIT",
