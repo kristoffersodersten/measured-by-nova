@@ -51,11 +51,13 @@ single operation and never crosses into Node, MCP, package output, logs, or
 evidence. The earlier claim that Ed25519 could be passed as a non-exportable
 Keychain handle was incorrect.
 
-Every native package binds the approved public-key SHA-256 fingerprint and a
-native consent event ID/time in addition to the canonical binding, payload hash,
-key ID, algorithm and signature. The production verifier independently derives
-the approved public-key fingerprint and rejects identity drift or any binding
-mutation after signing.
+Every native signature covers a domain-separated envelope containing the exact
+canonical binding hash, key ID, approved public-key SHA-256 fingerprint, native
+adapter identity, and consent method/event/time. The production verifier
+independently rebuilds this envelope, derives the approved public-key
+fingerprint, and rejects consent mutation, identity drift, or binding mutation.
+The executable workspace exposes the accepted signer key, fingerprint prefix,
+and consent time alongside the public trust state.
 
 Enrollment uses measured-publication-signer enroll --key-id ID and emits only
 the public PEM and fingerprint. An operator must install that exact PEM under

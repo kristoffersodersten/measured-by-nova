@@ -99,7 +99,7 @@ describe("publication trust contract", () => {
       signature: { ...capturePackage.signature, publicKeyFingerprintSha256: "0".repeat(64) }
     };
     expect(verifyPublicationCapturePackage(changedFingerprint, [artifact], () => publicKey).codes)
-      .toEqual(expect.arrayContaining(["signed_payload_hash_mismatch", "signing_key_fingerprint_mismatch"]));
+      .toEqual(["signed_payload_hash_mismatch"]);
   });
 
   it("keeps manual uploads as reference regardless of verified evidence declarations", () => {

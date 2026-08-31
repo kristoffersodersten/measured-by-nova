@@ -29,7 +29,14 @@ describe("publication trust store", () => {
     const packageBytes = JSON.stringify(packageDocument);
     await writeFile(path.join(packageDir, "capture-package.json"), packageBytes);
     const input = { projectId, executionIntent: intent, packageManifestPath: "captures/native-1/capture-package.json", publicKeyPath: "publication-keys/native-key-1.pem", disputes: [] };
-    expect((await verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, input)).classification.category).toBe("verified");
+    const verified = await verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, input);
+    expect(verified.classification.category).toBe("verified");
+    expect(verified.nativeSignerEvidence).toMatchObject({
+      keyId: "native-key-1",
+      publicKeyFingerprintSha256,
+      consentEventId: nativeEvidence.consent.eventId,
+      consentOccurredAt: nativeEvidence.consent.occurredAt
+    });
     await writeFile(path.join(packageDir, "capture-package.json"), JSON.stringify(packageDocument, null, 2));
     expect((await readLivePublicationTrust({ outputDir, timeoutMs: 1 }, projectId))?.classification).toMatchObject({ category: "disputed", verifiedScopeIds: [], unverifiedRequiredScopeIds: ["dimensions"] });
     await writeFile(path.join(packageDir, "capture-package.json"), packageBytes);

@@ -34,7 +34,8 @@ final class PublicationSignerTests: XCTestCase {
         )
         XCTAssertEqual(package.source, "native_app")
         XCTAssertEqual(package.nativeEvidence.consent.method, "device_owner_authentication")
-        XCTAssertEqual(package.signature.publicKeyFingerprintSha256.count, 64)
+        XCTAssertEqual(package.signature.publicKeyFingerprintSha256, "324be2dea8bc44461b0233e51fa48902ed6b1cc671e7739af2551e0bfe68f54e")
+        XCTAssertEqual(package.signature.signedPayloadSha256, "a1e0ac0c7d9596d9c8335d4f527a20166a670cfc00b3a3046d40584c86612436")
         XCTAssertTrue(key.publicKey.isValidSignature(Data(base64Encoded: package.signature.valueBase64)!, for: Data(hex: package.signature.signedPayloadSha256)!))
     }
 

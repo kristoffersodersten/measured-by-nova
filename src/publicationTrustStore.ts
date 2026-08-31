@@ -36,6 +36,13 @@ const StoredPublicationTrustSchema = z.object({
   packageManifestPath: RelativePathSchema,
   publicKeyPath: RelativePathSchema.optional(),
   packageManifestSha256: z.string().length(64),
+  nativeSignerEvidence: z.object({
+    keyId: z.string().min(1).max(120),
+    publicKeyFingerprintSha256: z.string().length(64),
+    adapter: z.literal("measured-native-macos"),
+    consentEventId: z.string().uuid(),
+    consentOccurredAt: z.string().datetime({ offset: true })
+  }).strict().optional(),
   evidenceScopes: z.array(PublicationEvidenceScopeSchema).max(10_000).default([]),
   disputes: z.array(PublicationDisputeSchema).max(10_000),
   verification: z.object({ valid: z.boolean(), codes: z.array(z.string()), verifiedBindings: z.array(z.string()) }).strict(),
@@ -149,7 +156,24 @@ async function evaluatePublicationTrust(config: BlenderConfig, input: Publicatio
   const classification = (capturePackage.source === "native_app" && !verification.valid) || (capturePackage.source === "manual_upload" && integrityInvalid)
     ? { ...classified, category: "disputed" as const, disputedScopeIds: [...new Set([...classified.disputedScopeIds, ...capturePackage.binding.evidenceScopes.map((scope) => scope.id)])].sort() }
     : classified;
-  return StoredPublicationTrustSchema.parse({ schemaVersion: 1, projectId: input.projectId, packageManifestPath: input.packageManifestPath, ...(input.publicKeyPath ? { publicKeyPath: input.publicKeyPath } : {}), packageManifestSha256: createHash("sha256").update(manifestBytes).digest("hex"), evidenceScopes: capturePackage.binding.evidenceScopes, disputes: input.disputes, verification, classification });
+  return StoredPublicationTrustSchema.parse({
+    schemaVersion: 1,
+    projectId: input.projectId,
+    packageManifestPath: input.packageManifestPath,
+    ...(input.publicKeyPath ? { publicKeyPath: input.publicKeyPath } : {}),
+    packageManifestSha256: createHash("sha256").update(manifestBytes).digest("hex"),
+    ...(capturePackage.source === "native_app" ? { nativeSignerEvidence: {
+      keyId: capturePackage.signature.keyId,
+      publicKeyFingerprintSha256: capturePackage.signature.publicKeyFingerprintSha256,
+      adapter: capturePackage.nativeEvidence.adapter,
+      consentEventId: capturePackage.nativeEvidence.consent.eventId,
+      consentOccurredAt: capturePackage.nativeEvidence.consent.occurredAt
+    } } : {}),
+    evidenceScopes: capturePackage.binding.evidenceScopes,
+    disputes: input.disputes,
+    verification,
+    classification
+  });
 }
 
 async function hashStableArtifact(artifactPath: string): Promise<Pick<CaptureArtifactContent, "observedSha256" | "observedSizeBytes">> {
