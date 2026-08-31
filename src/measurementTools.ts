@@ -75,6 +75,7 @@ import {
 } from "./measurementContracts.js";
 import { buildWebViewerPackage, validateWebViewerPackage } from "./webViewer.js";
 import { verifyAndStorePublicationTrust, VerifyPublicationCaptureInputSchema } from "./publicationTrustStore.js";
+import { signNativePublicationCapture, SignPublicationCaptureInputSchema } from "./publicationCaptureSigner.js";
 
 type MachineReason = {
   id?: string;
@@ -99,6 +100,46 @@ const PermitExportStrategies = [
 ];
 
 export function registerMeasurementTools(server: McpServer, config: BlenderConfig): void {
+  register(server, "sign_publication_capture_package", "Request explicit macOS device-owner consent and sign one exact capture binding with the configured Keychain-protected native identity.", SignPublicationCaptureInputSchema, async (input) => {
+    const req = requestId();
+    const payload = SignPublicationCaptureInputSchema.parse(input);
+    const executionGate = evaluateExecutionIntent(payload.executionIntent, "sign-publication-capture");
+    if (!executionGate.ok) return failExecutionIntent(req, executionGate);
+    if (!config.nativePublicationSignerPath) {
+      return fail(req, "publication_native_signer_not_configured", "MEASURED_NATIVE_SIGNER_PATH must identify the signed native macOS signer.");
+    }
+    try {
+      const capturePackage = await signNativePublicationCapture({
+        binding: payload.binding,
+        keyId: payload.keyId,
+        executablePath: config.nativePublicationSignerPath,
+        timeoutMs: config.timeoutMs
+      });
+      const outputPath = safeOutputPath(config.outputDir, payload.outputPackagePath);
+      await mkdir(path.dirname(outputPath), { recursive: true });
+      await writeFile(outputPath, `${JSON.stringify(capturePackage)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+      await appendRequestLog(config, payload.binding.projectId, req, "sign_publication_capture_package", {
+        projectId: payload.binding.projectId,
+        packageId: payload.binding.packageId,
+        keyId: payload.keyId,
+        outputPackagePath: payload.outputPackagePath,
+        publicKeyFingerprintSha256: capturePackage.source === "native_app" ? capturePackage.signature.publicKeyFingerprintSha256 : undefined,
+        consentEventId: capturePackage.source === "native_app" ? capturePackage.nativeEvidence.consent.eventId : undefined
+      });
+      const action = buildExecutionActionEvidence(payload.executionIntent, {
+        changedArtifacts: [payload.outputPackagePath],
+        verificationResults: [
+          { check: "schema", ok: true, evidence: "Native signer output matched the strict capture-package schema." },
+          { check: "quality-gate", ok: capturePackage.source === "native_app", evidence: "Only a native consent-bound package can pass this signing path." },
+          { check: "manifest", ok: true, evidence: "The native process signed the exact canonical binding without private-key transfer." }
+        ],
+        manifest: capturePackage
+      });
+      return ok(req, { packagePath: payload.outputPackagePath, capturePackage, execution: { intent: payload.executionIntent, action } });
+    } catch (error) {
+      return fail(req, "publication_native_signing_failed", error instanceof Error ? error.message : String(error));
+    }
+  });
   register(server, "verify_publication_capture_package", "Verify and persist live publication trust for an explicit native or manual capture package.", VerifyPublicationCaptureInputSchema, async (input) => {
     const req = requestId();
     const payload = VerifyPublicationCaptureInputSchema.parse(input);

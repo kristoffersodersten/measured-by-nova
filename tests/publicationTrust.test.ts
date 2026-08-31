@@ -40,9 +40,11 @@ function signedPackage() {
     signature: {
       algorithm: "Ed25519",
       keyId: "native-key-1",
+      publicKeyFingerprintSha256: createHash("sha256").update(publicKey.export({ type: "spki", format: "der" })).digest("hex"),
       signedPayloadSha256: payloadHash,
       valueBase64: sign(null, Buffer.from(payloadHash, "hex"), privateKey).toString("base64")
-    }
+    },
+    nativeEvidence: { adapter: "measured-native-macos", adapterVersion: 1, platform: "macos", consent: { method: "device_owner_authentication", eventId: "6e5a0fe7-23a7-4ac5-87ea-61b4654df129", occurredAt: "2026-08-31T20:00:00.000Z" } }
   });
   return { capturePackage, publicKey };
 }

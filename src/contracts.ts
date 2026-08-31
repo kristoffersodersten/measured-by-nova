@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const BlenderConfigSchema = z.object({
   blenderPath: z.string().optional(),
+  nativePublicationSignerPath: z.string().optional(),
   outputDir: z.string().default("outputs"),
   timeoutMs: z.number().int().positive().max(300_000).default(120_000)
 });

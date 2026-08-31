@@ -1,4 +1,4 @@
-import { createHash, verify as verifySignature, type KeyObject } from "node:crypto";
+import { createHash, createPublicKey, verify as verifySignature, type KeyObject } from "node:crypto";
 import { z } from "zod";
 
 const IdSchema = z.string().min(1).max(120).regex(/^[a-zA-Z0-9_.-]+$/);
@@ -59,8 +59,19 @@ const NativeCapturePackageSchema = z.object({
   signature: z.object({
     algorithm: z.literal("Ed25519"),
     keyId: IdSchema,
+    publicKeyFingerprintSha256: Sha256Schema,
     signedPayloadSha256: Sha256Schema,
     valueBase64: z.string().min(1).max(512).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/)
+  }).strict(),
+  nativeEvidence: z.object({
+    adapter: z.literal("measured-native-macos"),
+    adapterVersion: z.literal(1),
+    platform: z.literal("macos"),
+    consent: z.object({
+      method: z.literal("device_owner_authentication"),
+      eventId: z.string().uuid(),
+      occurredAt: z.string().datetime({ offset: true })
+    }).strict()
   }).strict()
 }).strict();
 
@@ -92,6 +103,7 @@ export const CapturePackageVerificationCodeSchema = z.enum([
   "signed_payload_hash_mismatch",
   "signing_key_unknown",
   "signing_key_revoked",
+  "signing_key_fingerprint_mismatch",
   "signature_invalid"
 ]);
 export type CapturePackageVerificationCode = z.infer<typeof CapturePackageVerificationCodeSchema>;
@@ -176,10 +188,16 @@ export function verifyPublicationCapturePackage(
         codes.push("signing_key_unknown");
       } else {
         try {
+          const publicKey = createPublicKey(signingKey);
+          if (publicKey.asymmetricKeyType !== "ed25519") {
+            codes.push("signature_invalid");
+          } else if (sha256(publicKey.export({ type: "spki", format: "der" })) !== capturePackage.signature.publicKeyFingerprintSha256) {
+            codes.push("signing_key_fingerprint_mismatch");
+          }
           const signatureValid = verifySignature(
             null,
             Buffer.from(payloadHash, "hex"),
-            signingKey,
+            publicKey,
             Buffer.from(capturePackage.signature.valueBase64, "base64")
           );
           if (!signatureValid) {
