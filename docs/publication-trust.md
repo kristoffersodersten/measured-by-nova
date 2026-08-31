@@ -36,14 +36,32 @@ that identity. To revoke a key, atomically write
 keys are revoked; a malformed registry fails closed. Existing evidence signed
 by a revoked key cannot be revalidated or upgraded.
 
-The native signer boundary is `signNativePublicationCapture`. It accepts an
-already unlocked local Ed25519 private `KeyObject`; it does not discover keys,
-read key files, export private bytes, or provide cloud signing. A native adapter
-must obtain explicit user consent and unlock the key through the platform
-Keychain, pass the non-exported handle for one operation, then release it. The
-result contains only the canonical binding, payload hash, key ID, algorithm and
-signature. The production verifier independently resolves the approved public
-key and rejects any binding mutation after signing.
+The production signing boundary is the sign_publication_capture_package MCP
+operation backed by the separately configured, signed macOS
+measured-publication-signer executable. The operation accepts only an exact
+capture binding, key ID, explicit local-only execution intent and new output
+path. It has no private-key, arbitrary-payload, cloud, or fallback input.
+
+Ed25519 has no native SecKey representation on Apple platforms. The native
+adapter therefore stores the CryptoKit key as Keychain-protected data with
+userPresence and device-only accessibility. Explicit device-owner
+authentication occurs before each identity read, signature, or local
+revocation. Raw key reconstruction is confined to the native process for the
+single operation and never crosses into Node, MCP, package output, logs, or
+evidence. The earlier claim that Ed25519 could be passed as a non-exportable
+Keychain handle was incorrect.
+
+Every native package binds the approved public-key SHA-256 fingerprint and a
+native consent event ID/time in addition to the canonical binding, payload hash,
+key ID, algorithm and signature. The production verifier independently derives
+the approved public-key fingerprint and rejects identity drift or any binding
+mutation after signing.
+
+Enrollment uses measured-publication-signer enroll --key-id ID and emits only
+the public PEM and fingerprint. An operator must install that exact PEM under
+publication-keys/ID.pem before intake can return Verified. Removing a local
+identity does not revoke previously signed evidence; public revocation is
+performed through the fail-closed registry described above.
 
 Manual uploads have no path to `Measured Verified`; they are always
 `Measured Reference`.
