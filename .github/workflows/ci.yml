@@ -14,6 +14,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  native-signer:
+    name: native-signer
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Test native publication signer
+        working-directory: native/macos-signer
+        run: swift test --disable-sandbox
+      - name: Build native publication signer
+        working-directory: native/macos-signer
+        run: swift build --configuration release --disable-sandbox
+      - name: Record native binary identity
+        run: |
+          mkdir -p evidence/native-signer
+          signer="native/macos-signer/.build/release/measured-publication-signer"
+          test -x "$signer"
+          shasum -a 256 "$signer" | tee evidence/native-signer/SHA256SUMS
+          file "$signer" | tee evidence/native-signer/file.txt
+          swift --version | tee evidence/native-signer/swift-version.txt
+          native/macos-signer/package-app.sh "$signer" evidence/native-signer 0.0.0 "$GITHUB_RUN_NUMBER"
+          codesign --force --sign - --options runtime --entitlements native/macos-signer/MeasuredPublicationSigner.entitlements "evidence/native-signer/Measured Publication Signer.app"
+          codesign --verify --deep --strict --verbose=2 "evidence/native-signer/Measured Publication Signer.app"
+          codesign --display --entitlements :- "evidence/native-signer/Measured Publication Signer.app" > evidence/native-signer/entitlements.plist
+          ditto -c -k --keepParent "evidence/native-signer/Measured Publication Signer.app" evidence/native-signer/measured-publication-signer-macos.zip
+          rm -rf "evidence/native-signer/Measured Publication Signer.app"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1 (Node 24)
+        with:
+          name: measured-native-signer-${{ github.sha }}
+          path: evidence/native-signer/
+          if-no-files-found: error
+          retention-days: 30
+
   quality:
     name: quality
     runs-on: ubuntu-24.04

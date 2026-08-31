@@ -1,7 +1,6 @@
-import { createHash, generateKeyPairSync } from "node:crypto";
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { signNativePublicationCapture } from "../src/publicationCaptureSigner.js";
-import { verifyPublicationCapturePackage } from "../src/publicationTrust.js";
 
 const artifact = Buffer.from("measured native evidence");
 const binding = {
@@ -12,26 +11,20 @@ const binding = {
   manifest: [{ path: "evidence.json", sha256: createHash("sha256").update(artifact).digest("hex"), sizeBytes: artifact.byteLength }]
 };
 
-describe("native publication capture signer", () => {
-  it("signs an exact binding that the production verifier accepts", () => {
-    const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-    const capturePackage = signNativePublicationCapture({ binding, keyId: "native-key-1", privateKey });
-    expect(verifyPublicationCapturePackage(capturePackage, [{ path: "evidence.json", content: artifact }], (keyId) => keyId === "native-key-1" ? publicKey : undefined)).toMatchObject({ valid: true, codes: [] });
-    expect(JSON.stringify(capturePackage)).not.toContain("PRIVATE KEY");
+describe("native publication capture signer adapter", () => {
+  it("fails closed outside the required macOS native runtime", async () => {
+    await expect(signNativePublicationCapture({
+      binding, keyId: "native-key-1", executablePath: "/not/invoked", expectedExecutableSha256: "0".repeat(64)
+    })).rejects.toThrow("publication_native_signer_macos_required");
   });
 
-  it("rejects wrong key classes, malformed identifiers and ambiguous bindings", () => {
-    const { privateKey: rsaKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-    const { privateKey } = generateKeyPairSync("ed25519");
-    expect(() => signNativePublicationCapture({ binding, keyId: "native-key-1", privateKey: rsaKey })).toThrow("publication_signer_ed25519_private_key_required");
-    expect(() => signNativePublicationCapture({ binding, keyId: "../escape", privateKey })).toThrow();
-    expect(() => signNativePublicationCapture({ binding: { ...binding, evidenceScopes: [binding.evidenceScopes[0], binding.evidenceScopes[0]] }, keyId: "native-key-1", privateKey })).toThrow("Duplicate evidence scope ID");
-  });
-
-  it("makes post-signing binding mutation fail closed", () => {
-    const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-    const capturePackage = signNativePublicationCapture({ binding, keyId: "native-key-1", privateKey });
-    const mutated = { ...capturePackage, binding: { ...capturePackage.binding, objectId: "different-object" } };
-    expect(verifyPublicationCapturePackage(mutated, [{ path: "evidence.json", content: artifact }], () => publicKey)).toMatchObject({ valid: false, codes: ["signed_payload_hash_mismatch"] });
+  it("rejects malformed identity and ambiguous binding before execution", async () => {
+    await expect(signNativePublicationCapture({
+      binding, keyId: "../escape", executablePath: "/not/invoked", expectedExecutableSha256: "0".repeat(64)
+    })).rejects.toThrow();
+    await expect(signNativePublicationCapture({
+      binding: { ...binding, evidenceScopes: [binding.evidenceScopes[0], binding.evidenceScopes[0]] },
+      keyId: "native-key-1", executablePath: "/not/invoked", expectedExecutableSha256: "0".repeat(64)
+    })).rejects.toThrow("Duplicate evidence scope ID");
   });
 });

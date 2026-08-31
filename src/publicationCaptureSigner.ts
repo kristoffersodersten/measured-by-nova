@@ -1,31 +1,84 @@
-import { sign, type KeyObject } from "node:crypto";
+import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
 import { z } from "zod";
+import { ExecutionIntentSchema } from "./executionGate.js";
 import {
   CapturePackageBindingSchema,
-  capturePackagePayloadSha256,
   PublicationCapturePackageSchema,
   type CapturePackageBinding,
   type PublicationCapturePackage
 } from "./publicationTrust.js";
 
+const execFileAsync = promisify(execFile);
 const KeyIdSchema = z.string().min(1).max(120).regex(/^[A-Za-z0-9_.-]+$/);
 
-/** Signs a validated binding without reading or serializing private key material. */
-export function signNativePublicationCapture(input: {
+export const NativePublicationSigningInputSchema = z.object({
+  binding: CapturePackageBindingSchema,
+  keyId: KeyIdSchema
+}).strict();
+
+export const SignPublicationCaptureInputSchema = NativePublicationSigningInputSchema.extend({
+  executionIntent: ExecutionIntentSchema,
+  outputPackagePath: z.string().min(1).max(240).refine(
+    (value) => !path.isAbsolute(value) && !value.split(/[\\/]/).includes(".."),
+    "Signed package path must stay inside outputDir."
+  )
+}).strict();
+
+/** Requests one exact capture-package signature from the native macOS adapter. */
+export async function signNativePublicationCapture(input: {
   binding: CapturePackageBinding;
   keyId: string;
-  privateKey: KeyObject;
-}): PublicationCapturePackage {
-  const keyId = KeyIdSchema.parse(input.keyId);
-  if (input.privateKey.type !== "private" || input.privateKey.asymmetricKeyType !== "ed25519") {
-    throw new Error("publication_signer_ed25519_private_key_required");
+  executablePath: string;
+  expectedExecutableSha256: string;
+  timeoutMs?: number;
+}): Promise<PublicationCapturePackage> {
+  const payload = NativePublicationSigningInputSchema.parse({ binding: input.binding, keyId: input.keyId });
+  if (process.platform !== "darwin") throw new Error("publication_native_signer_macos_required");
+  const executablePath = path.resolve(input.executablePath);
+  const resolvedExecutable = await realpath(executablePath);
+  if (resolvedExecutable !== executablePath) throw new Error("publication_native_signer_symlink_forbidden");
+  const executableStat = await stat(resolvedExecutable);
+  if (!executableStat.isFile() || (executableStat.mode & 0o111) === 0 || executableStat.size > 16 * 1024 * 1024 ||
+      executableStat.uid !== 0 || (executableStat.mode & 0o022) !== 0) {
+    throw new Error("publication_native_signer_not_executable");
   }
-  const binding = CapturePackageBindingSchema.parse(input.binding);
-  const signedPayloadSha256 = capturePackagePayloadSha256(binding);
-  const valueBase64 = sign(null, Buffer.from(signedPayloadSha256, "hex"), input.privateKey).toString("base64");
-  return PublicationCapturePackageSchema.parse({
-    source: "native_app",
-    binding,
-    signature: { algorithm: "Ed25519", keyId, signedPayloadSha256, valueBase64 }
-  });
+  const executableBytes = await readFile(resolvedExecutable);
+  if (createHash("sha256").update(executableBytes).digest("hex") !== input.expectedExecutableSha256) {
+    throw new Error("publication_native_signer_hash_mismatch");
+  }
+
+  const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "measured-native-sign-"));
+  const bindingPath = path.join(temporaryDirectory, "binding.json");
+  try {
+    await writeFile(bindingPath, `${JSON.stringify(payload.binding)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    const beforeExecution = await stat(resolvedExecutable);
+    if (beforeExecution.dev !== executableStat.dev || beforeExecution.ino !== executableStat.ino ||
+        beforeExecution.size !== executableStat.size || beforeExecution.mtimeMs !== executableStat.mtimeMs ||
+        beforeExecution.ctimeMs !== executableStat.ctimeMs) {
+      throw new Error("publication_native_signer_changed_during_verification");
+    }
+    const { stdout, stderr } = await execFileAsync(resolvedExecutable, [
+      "sign", "--key-id", payload.keyId, "--binding-file", bindingPath
+    ], {
+      encoding: "utf8",
+      timeout: Math.min(input.timeoutMs ?? 120_000, 300_000),
+      maxBuffer: 1024 * 1024,
+      windowsHide: true,
+      env: { PATH: "/usr/bin:/bin:/usr/sbin:/sbin", HOME: os.homedir() }
+    });
+    if (stderr.trim()) throw new Error("publication_native_signer_stderr");
+    return PublicationCapturePackageSchema.parse(JSON.parse(stdout));
+  } catch (error) {
+    if (error instanceof z.ZodError || error instanceof SyntaxError) {
+      throw new Error("publication_native_signer_output_invalid");
+    }
+    throw error;
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
 }

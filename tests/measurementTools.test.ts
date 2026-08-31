@@ -166,6 +166,33 @@ function makeToolHarness(outputDir: string): Map<string, RegisteredTool> {
 }
 
 describe("measurement MCP digital viewing tools", () => {
+  it("exposes the production signer and fails closed without an explicit native adapter", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
+    const artifact = Buffer.from("native signer boundary");
+    const tools = makeToolHarness(outputDir);
+    const result = await tools.get("sign_publication_capture_package")!.handler({
+      binding: {
+        schemaVersion: 1,
+        packageId: "native-package-1",
+        projectId: "project-1",
+        objectId: "object-1",
+        captureProtocolId: "protocol-1",
+        kitId: "kit-1",
+        commissioningPartyId: "party-1",
+        capturedAt: "2026-08-31T20:00:00.000Z",
+        evidenceScopes: [{ id: "dimensions", kind: "measurement", required: true, verified: true }],
+        manifest: [{ path: "evidence.json", sha256: createHash("sha256").update(artifact).digest("hex"), sizeBytes: artifact.byteLength }]
+      },
+      keyId: "native-key-1",
+      outputPackagePath: "captures/native-package-1/capture-package.json",
+      executionIntent: executionIntent("sign-publication-capture", ["manifest"])
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.parse(result.content[0].text)).toMatchObject({
+      error: { code: "publication_native_signer_not_configured" }
+    });
+  });
+
   it("keeps a real capture fixture export-blocked until human model review lock", async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
     const tools = makeToolHarness(outputDir);

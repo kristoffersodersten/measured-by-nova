@@ -20,6 +20,11 @@
   exact verified evidence scopes while required scopes remain unverified.
 - **Disputed**: A public classification that preserves provenance while showing
   the exact evidence scopes under an active dispute.
+- **Native signer identity**: A locally enrolled Ed25519 identity whose private
+  material is protected by the platform Keychain and is usable only after an
+  explicit device-owner consent event inside the native signing process. The
+  private material never crosses into the MCP, Node, package, log, or evidence
+  boundary.
 
 ## Avoided Terms
 
