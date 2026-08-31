@@ -83,7 +83,8 @@ pkgutil --check-signature measured-publication-signer.pkg
 ```
 
 After installation, MEASURED_NATIVE_SIGNER_PATH identifies the exact executable
-inside the app bundle. Completion evidence includes app and installer SHA-256,
+inside the app bundle and MEASURED_NATIVE_SIGNER_SHA256 pins its published
+digest. Completion evidence includes app and installer SHA-256,
 Developer ID authorities, notarization submission ID, staple validation,
 installed designated requirement, enrolled public fingerprint, explicit
 consent event, signed package digest, intake result, Verified UI, and

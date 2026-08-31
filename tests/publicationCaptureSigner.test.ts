@@ -14,17 +14,17 @@ const binding = {
 describe("native publication capture signer adapter", () => {
   it("fails closed outside the required macOS native runtime", async () => {
     await expect(signNativePublicationCapture({
-      binding, keyId: "native-key-1", executablePath: "/not/invoked"
+      binding, keyId: "native-key-1", executablePath: "/not/invoked", expectedExecutableSha256: "0".repeat(64)
     })).rejects.toThrow("publication_native_signer_macos_required");
   });
 
   it("rejects malformed identity and ambiguous binding before execution", async () => {
     await expect(signNativePublicationCapture({
-      binding, keyId: "../escape", executablePath: "/not/invoked"
+      binding, keyId: "../escape", executablePath: "/not/invoked", expectedExecutableSha256: "0".repeat(64)
     })).rejects.toThrow();
     await expect(signNativePublicationCapture({
       binding: { ...binding, evidenceScopes: [binding.evidenceScopes[0], binding.evidenceScopes[0]] },
-      keyId: "native-key-1", executablePath: "/not/invoked"
+      keyId: "native-key-1", executablePath: "/not/invoked", expectedExecutableSha256: "0".repeat(64)
     })).rejects.toThrow("Duplicate evidence scope ID");
   });
 });

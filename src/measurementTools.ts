@@ -105,14 +105,15 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     const payload = SignPublicationCaptureInputSchema.parse(input);
     const executionGate = evaluateExecutionIntent(payload.executionIntent, "sign-publication-capture");
     if (!executionGate.ok) return failExecutionIntent(req, executionGate);
-    if (!config.nativePublicationSignerPath) {
-      return fail(req, "publication_native_signer_not_configured", "MEASURED_NATIVE_SIGNER_PATH must identify the signed native macOS signer.");
+    if (!config.nativePublicationSignerPath || !config.nativePublicationSignerSha256) {
+      return fail(req, "publication_native_signer_not_configured", "MEASURED_NATIVE_SIGNER_PATH and MEASURED_NATIVE_SIGNER_SHA256 must identify the exact signed native macOS signer.");
     }
     try {
       const capturePackage = await signNativePublicationCapture({
         binding: payload.binding,
         keyId: payload.keyId,
         executablePath: config.nativePublicationSignerPath,
+        expectedExecutableSha256: config.nativePublicationSignerSha256,
         timeoutMs: config.timeoutMs
       });
       const outputPath = safeOutputPath(config.outputDir, payload.outputPackagePath);

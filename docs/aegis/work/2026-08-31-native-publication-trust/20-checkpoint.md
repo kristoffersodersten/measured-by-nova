@@ -15,11 +15,11 @@ Node adapter without permitting arbitrary private-key input.
 
 ## Todo
 
-- [in progress] Native Keychain identity, explicit consent, signature, public identity export.
-- [pending] Strict adapter and MCP production consumer.
-- [pending] Fingerprint/consent evidence enforced by verifier and UI.
+- [implemented, runtime pending] Native Keychain identity, explicit consent, signature, public identity export.
+- [implemented] Strict adapter and MCP production consumer.
+- [implemented] Fingerprint/consent evidence enforced by verifier and UI.
 - [pending] Revocation and recovery runtime proof.
-- [pending] Gap, blind-spot, negative-space and hostile-reality suites.
+- [in progress] Gap, blind-spot, negative-space and hostile-reality suites.
 - [pending] Remote/full CI and macOS native CI.
 - [pending] Independent review, protected merge, signed release, artifact and production smoke.
 - [pending] Exact Linear/GitHub evidence and full-system DoD judgment.
@@ -33,4 +33,5 @@ runtime proof.
 ## Drift check
 
 Decision: continue. No fallback, alternate signer, release mutation, or scope
-expansion has been introduced.
+expansion has been introduced. Apple production identities/profile and genuine
+runtime evidence remain external admission blockers, not completion.

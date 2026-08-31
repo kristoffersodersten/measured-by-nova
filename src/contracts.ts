@@ -3,8 +3,13 @@ import { z } from "zod";
 export const BlenderConfigSchema = z.object({
   blenderPath: z.string().optional(),
   nativePublicationSignerPath: z.string().optional(),
+  nativePublicationSignerSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   outputDir: z.string().default("outputs"),
   timeoutMs: z.number().int().positive().max(300_000).default(120_000)
+}).superRefine((value, context) => {
+  if ((value.nativePublicationSignerPath === undefined) !== (value.nativePublicationSignerSha256 === undefined)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Native signer path and SHA-256 must be configured together." });
+  }
 });
 
 export type BlenderConfig = z.infer<typeof BlenderConfigSchema>;

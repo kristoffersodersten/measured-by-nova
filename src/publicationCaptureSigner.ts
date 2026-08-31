@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -33,6 +34,7 @@ export async function signNativePublicationCapture(input: {
   binding: CapturePackageBinding;
   keyId: string;
   executablePath: string;
+  expectedExecutableSha256: string;
   timeoutMs?: number;
 }): Promise<PublicationCapturePackage> {
   const payload = NativePublicationSigningInputSchema.parse({ binding: input.binding, keyId: input.keyId });
@@ -41,14 +43,25 @@ export async function signNativePublicationCapture(input: {
   const resolvedExecutable = await realpath(executablePath);
   if (resolvedExecutable !== executablePath) throw new Error("publication_native_signer_symlink_forbidden");
   const executableStat = await stat(resolvedExecutable);
-  if (!executableStat.isFile() || (executableStat.mode & 0o111) === 0) {
+  if (!executableStat.isFile() || (executableStat.mode & 0o111) === 0 || executableStat.size > 16 * 1024 * 1024 ||
+      executableStat.uid !== 0 || (executableStat.mode & 0o022) !== 0) {
     throw new Error("publication_native_signer_not_executable");
+  }
+  const executableBytes = await readFile(resolvedExecutable);
+  if (createHash("sha256").update(executableBytes).digest("hex") !== input.expectedExecutableSha256) {
+    throw new Error("publication_native_signer_hash_mismatch");
   }
 
   const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "measured-native-sign-"));
   const bindingPath = path.join(temporaryDirectory, "binding.json");
   try {
     await writeFile(bindingPath, `${JSON.stringify(payload.binding)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    const beforeExecution = await stat(resolvedExecutable);
+    if (beforeExecution.dev !== executableStat.dev || beforeExecution.ino !== executableStat.ino ||
+        beforeExecution.size !== executableStat.size || beforeExecution.mtimeMs !== executableStat.mtimeMs ||
+        beforeExecution.ctimeMs !== executableStat.ctimeMs) {
+      throw new Error("publication_native_signer_changed_during_verification");
+    }
     const { stdout, stderr } = await execFileAsync(resolvedExecutable, [
       "sign", "--key-id", payload.keyId, "--binding-file", bindingPath
     ], {

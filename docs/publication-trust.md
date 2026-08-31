@@ -41,6 +41,11 @@ operation backed by the separately configured, signed macOS
 measured-publication-signer executable. The operation accepts only an exact
 capture binding, key ID, explicit local-only execution intent and new output
 path. It has no private-key, arbitrary-payload, cloud, or fallback input.
+MEASURED_NATIVE_SIGNER_SHA256 pins the exact release binary. The adapter rejects
+symlinks, non-executable or oversized files, hash drift, non-root ownership,
+group/world-writable installation and file-state drift immediately before
+execution. The signed installer owns the executable placement; a user-writable
+development copy is not admissible as production runtime evidence.
 
 Ed25519 has no native SecKey representation on Apple platforms. The native
 adapter therefore stores the CryptoKit key as Keychain-protected data with
