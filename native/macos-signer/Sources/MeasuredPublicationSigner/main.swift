@@ -1,7 +1,7 @@
 import CryptoKit
 import Darwin
 import Foundation
-import LocalAuthentication
+@preconcurrency import LocalAuthentication
 import MeasuredSignerCore
 import Security
 
@@ -37,6 +37,7 @@ private struct Arguments {
 }
 
 @main
+@MainActor
 private enum Main {
     static func main() async {
         do {
@@ -81,6 +82,7 @@ private enum Main {
     }
 }
 
+@MainActor
 private func authorize(_ reason: String) async throws -> LAContext {
     let context = LAContext()
     context.localizedReason = reason
