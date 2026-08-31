@@ -36,7 +36,12 @@ jobs:
           shasum -a 256 "$signer" | tee evidence/native-signer/SHA256SUMS
           file "$signer" | tee evidence/native-signer/file.txt
           swift --version | tee evidence/native-signer/swift-version.txt
-          cp "$signer" evidence/native-signer/
+          native/macos-signer/package-app.sh "$signer" evidence/native-signer 0.0.0 "$GITHUB_RUN_NUMBER"
+          codesign --force --sign - --options runtime --entitlements native/macos-signer/MeasuredPublicationSigner.entitlements "evidence/native-signer/Measured Publication Signer.app"
+          codesign --verify --deep --strict --verbose=2 "evidence/native-signer/Measured Publication Signer.app"
+          codesign --display --entitlements :- "evidence/native-signer/Measured Publication Signer.app" > evidence/native-signer/entitlements.plist
+          ditto -c -k --keepParent "evidence/native-signer/Measured Publication Signer.app" evidence/native-signer/measured-publication-signer-macos.zip
+          rm -rf "evidence/native-signer/Measured Publication Signer.app"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1 (Node 24)
         with:
           name: measured-native-signer-${{ github.sha }}
