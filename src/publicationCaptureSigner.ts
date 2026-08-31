@@ -35,7 +35,7 @@ export async function signNativePublicationCapture(input: {
   executablePath: string;
   timeoutMs?: number;
 }): Promise<PublicationCapturePackage> {
-  const payload = NativePublicationSigningInputSchema.parse(input);
+  const payload = NativePublicationSigningInputSchema.parse({ binding: input.binding, keyId: input.keyId });
   if (process.platform !== "darwin") throw new Error("publication_native_signer_macos_required");
   const executablePath = path.resolve(input.executablePath);
   const resolvedExecutable = await realpath(executablePath);

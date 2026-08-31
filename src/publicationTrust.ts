@@ -188,7 +188,9 @@ export function verifyPublicationCapturePackage(
         codes.push("signing_key_unknown");
       } else {
         try {
-          const publicKey = createPublicKey(signingKey);
+          const publicKey = typeof signingKey === "string" || signingKey.type === "private"
+            ? createPublicKey(signingKey)
+            : signingKey;
           if (publicKey.asymmetricKeyType !== "ed25519") {
             codes.push("signature_invalid");
           } else if (sha256(publicKey.export({ type: "spki", format: "der" })) !== capturePackage.signature.publicKeyFingerprintSha256) {
