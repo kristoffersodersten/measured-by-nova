@@ -69,7 +69,9 @@ private enum Main {
             case "revoke-local":
                 let context = try await authorize("Remove the local Measured by Nova publication signing identity")
                 _ = try requiredKey(args.keyId, context: context)
-                let status = SecItemDelete(keyQuery(args.keyId) as CFDictionary)
+                var query = keyQuery(args.keyId)
+                query[kSecUseAuthenticationContext as String] = context
+                let status = SecItemDelete(query as CFDictionary)
                 guard status == errSecSuccess else { throw CliError.keychainFailure(status) }
                 try emit(["keyId": args.keyId, "removed": "true"], outputFile: args.outputFile)
             default:

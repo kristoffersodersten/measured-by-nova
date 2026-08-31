@@ -100,6 +100,32 @@ public enum PublicationSigner {
         try payloadHash(binding).hex
     }
 
+    public static func signaturePayloadHash(
+        binding: CaptureBinding,
+        keyId: String,
+        publicKeyFingerprintSha256: String,
+        nativeEvidence: NativeEvidence
+    ) throws -> Data {
+        try validateKeyId(keyId)
+        guard publicKeyFingerprintSha256.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil else {
+            throw PublicationSignerError.invalidBinding
+        }
+        let envelope = [
+            "MeasuredByNovaPublicationSignatureV1",
+            try payloadHashHex(binding),
+            keyId,
+            publicKeyFingerprintSha256,
+            nativeEvidence.adapter,
+            String(nativeEvidence.adapterVersion),
+            nativeEvidence.platform,
+            nativeEvidence.consent.method,
+            nativeEvidence.consent.eventId,
+            nativeEvidence.consent.occurredAt,
+            ""
+        ].joined(separator: "\n")
+        return Data(SHA256.hash(data: Data(envelope.utf8)))
+    }
+
     public static func publicIdentity(keyId: String, privateKey: Curve25519.Signing.PrivateKey) throws -> PublicIdentity {
         try validateKeyId(keyId)
         let der = ed25519SubjectPublicKeyInfo(privateKey.publicKey.rawRepresentation)
@@ -124,8 +150,23 @@ public enum PublicationSigner {
               ISO8601DateFormatter().date(from: consentOccurredAt) != nil else {
             throw PublicationSignerError.invalidBinding
         }
-        let hash = try payloadHash(binding)
         let identity = try publicIdentity(keyId: keyId, privateKey: privateKey)
+        let nativeEvidence = NativeEvidence(
+            adapter: adapterName,
+            adapterVersion: adapterVersion,
+            platform: "macos",
+            consent: ConsentEvidence(
+                method: "device_owner_authentication",
+                eventId: consentEventId,
+                occurredAt: consentOccurredAt
+            )
+        )
+        let hash = try signaturePayloadHash(
+            binding: binding,
+            keyId: keyId,
+            publicKeyFingerprintSha256: identity.publicKeyFingerprintSha256,
+            nativeEvidence: nativeEvidence
+        )
         let signature = try privateKey.signature(for: hash)
         return SignedCapturePackage(
             source: "native_app",
@@ -137,16 +178,7 @@ public enum PublicationSigner {
                 signedPayloadSha256: hash.hex,
                 valueBase64: signature.base64EncodedString()
             ),
-            nativeEvidence: NativeEvidence(
-                adapter: adapterName,
-                adapterVersion: adapterVersion,
-                platform: "macos",
-                consent: ConsentEvidence(
-                    method: "device_owner_authentication",
-                    eventId: consentEventId,
-                    occurredAt: consentOccurredAt
-                )
-            )
+            nativeEvidence: nativeEvidence
         )
     }
 

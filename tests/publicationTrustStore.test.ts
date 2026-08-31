@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rename, rm, symlink, writeFile } from "node:fs/promises
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { capturePackagePayloadSha256 } from "../src/publicationTrust.js";
+import { capturePackageSignaturePayloadSha256 } from "../src/publicationTrust.js";
 import { readLivePublicationTrust, verifyAndStorePublicationTrust } from "../src/publicationTrustStore.js";
 
 const intent = { intentId: "trust-proof", operation: "verify-publication-capture" as const, objective: "Verify exact capture publication evidence", writeScope: ["project-state", "manifest"] as const, forbiddenScope: ["source-measurements", "locked-geometry"] as const, selectedToolPath: "mcp:nova-measured" as const, acceptanceChecks: ["schema", "quality-gate", "manifest"] as const, executionPolicy: { locality: "local-only" as const, telemetry: false, fallback: "none" as const, geometryMutation: false } };
@@ -21,9 +21,11 @@ describe("publication trust store", () => {
     await writeFile(path.join(packageDir, "evidence.json"), artifact);
     const binding = { schemaVersion: 1 as const, packageId: "native-1", projectId, objectId: "object-1", captureProtocolId: "protocol-1", kitId: "kit-1", commissioningPartyId: "party-1", capturedAt: "2026-08-16T00:00:00.000Z", evidenceScopes: [{ id: "dimensions", kind: "measurement" as const, required: true, verified: true }], manifest: [{ path: "evidence.json", sha256: createHash("sha256").update(artifact).digest("hex"), sizeBytes: artifact.byteLength }] };
     const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-    const payloadHash = capturePackagePayloadSha256(binding);
+    const publicKeyFingerprintSha256 = createHash("sha256").update(publicKey.export({ type: "spki", format: "der" })).digest("hex");
+    const nativeEvidence = { adapter: "measured-native-macos" as const, adapterVersion: 1 as const, platform: "macos" as const, consent: { method: "device_owner_authentication" as const, eventId: "6e5a0fe7-23a7-4ac5-87ea-61b4654df129", occurredAt: "2026-08-31T20:00:00.000Z" } };
+    const payloadHash = capturePackageSignaturePayloadSha256({ binding, keyId: "native-key-1", publicKeyFingerprintSha256, nativeEvidence });
     await writeFile(path.join(outputDir, "publication-keys", "native-key-1.pem"), publicKey.export({ type: "spki", format: "pem" }));
-    const packageDocument = { source: "native_app", binding, signature: { algorithm: "Ed25519", keyId: "native-key-1", publicKeyFingerprintSha256: createHash("sha256").update(publicKey.export({ type: "spki", format: "der" })).digest("hex"), signedPayloadSha256: payloadHash, valueBase64: sign(null, Buffer.from(payloadHash, "hex"), privateKey).toString("base64") }, nativeEvidence: { adapter: "measured-native-macos", adapterVersion: 1, platform: "macos", consent: { method: "device_owner_authentication", eventId: "6e5a0fe7-23a7-4ac5-87ea-61b4654df129", occurredAt: "2026-08-31T20:00:00.000Z" } } };
+    const packageDocument = { source: "native_app", binding, signature: { algorithm: "Ed25519", keyId: "native-key-1", publicKeyFingerprintSha256, signedPayloadSha256: payloadHash, valueBase64: sign(null, Buffer.from(payloadHash, "hex"), privateKey).toString("base64") }, nativeEvidence };
     const packageBytes = JSON.stringify(packageDocument);
     await writeFile(path.join(packageDir, "capture-package.json"), packageBytes);
     const input = { projectId, executionIntent: intent, packageManifestPath: "captures/native-1/capture-package.json", publicKeyPath: "publication-keys/native-key-1.pem", disputes: [] };
@@ -123,9 +125,11 @@ describe("publication trust store", () => {
     await writeFile(replacementPath, replacement);
     const binding = { schemaVersion: 1 as const, packageId: "native-race", projectId, objectId: "object-1", captureProtocolId: "protocol-1", kitId: "kit-1", commissioningPartyId: "party-1", capturedAt: "2026-08-16T00:00:00.000Z", evidenceScopes: [{ id: "dimensions", kind: "measurement" as const, required: true, verified: true }], manifest: [{ path: "evidence.bin", sha256: createHash("sha256").update(artifact).digest("hex"), sizeBytes: artifact.byteLength }] };
     const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-    const payloadHash = capturePackagePayloadSha256(binding);
+    const publicKeyFingerprintSha256 = createHash("sha256").update(publicKey.export({ type: "spki", format: "der" })).digest("hex");
+    const nativeEvidence = { adapter: "measured-native-macos" as const, adapterVersion: 1 as const, platform: "macos" as const, consent: { method: "device_owner_authentication" as const, eventId: "6e5a0fe7-23a7-4ac5-87ea-61b4654df129", occurredAt: "2026-08-31T20:00:00.000Z" } };
+    const payloadHash = capturePackageSignaturePayloadSha256({ binding, keyId: "race-key", publicKeyFingerprintSha256, nativeEvidence });
     await writeFile(path.join(outputDir, "publication-keys", "race-key.pem"), publicKey.export({ type: "spki", format: "pem" }));
-    await writeFile(path.join(packageDir, "capture-package.json"), JSON.stringify({ source: "native_app", binding, signature: { algorithm: "Ed25519", keyId: "race-key", publicKeyFingerprintSha256: createHash("sha256").update(publicKey.export({ type: "spki", format: "der" })).digest("hex"), signedPayloadSha256: payloadHash, valueBase64: sign(null, Buffer.from(payloadHash, "hex"), privateKey).toString("base64") }, nativeEvidence: { adapter: "measured-native-macos", adapterVersion: 1, platform: "macos", consent: { method: "device_owner_authentication", eventId: "6e5a0fe7-23a7-4ac5-87ea-61b4654df129", occurredAt: "2026-08-31T20:00:00.000Z" } } }));
+    await writeFile(path.join(packageDir, "capture-package.json"), JSON.stringify({ source: "native_app", binding, signature: { algorithm: "Ed25519", keyId: "race-key", publicKeyFingerprintSha256, signedPayloadSha256: payloadHash, valueBase64: sign(null, Buffer.from(payloadHash, "hex"), privateKey).toString("base64") }, nativeEvidence }));
     const verification = verifyAndStorePublicationTrust({ outputDir, timeoutMs: 1 }, { projectId, executionIntent: intent, packageManifestPath: "captures/native-race/capture-package.json", publicKeyPath: "publication-keys/race-key.pem" });
     await new Promise((resolve) => setTimeout(resolve, 5));
     await rename(artifactPath, retiredPath);

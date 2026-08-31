@@ -85,6 +85,7 @@ export const PublicationCapturePackageSchema = z.discriminatedUnion("source", [
   ManualCapturePackageSchema
 ]);
 export type PublicationCapturePackage = z.infer<typeof PublicationCapturePackageSchema>;
+type NativeCapturePackage = Extract<PublicationCapturePackage, { source: "native_app" }>;
 
 export interface CaptureArtifactContent {
   path: string;
@@ -143,6 +144,31 @@ export function capturePackagePayloadSha256(
   return sha256(canonicalBinding(CapturePackageBindingSchema.parse(binding)));
 }
 
+export function capturePackageSignaturePayloadSha256(input: {
+  binding: CapturePackageBinding;
+  keyId: string;
+  publicKeyFingerprintSha256: string;
+  nativeEvidence: NativeCapturePackage["nativeEvidence"];
+}): string {
+  const bindingHash = capturePackagePayloadSha256(input.binding);
+  const keyId = IdSchema.parse(input.keyId);
+  const fingerprint = Sha256Schema.parse(input.publicKeyFingerprintSha256);
+  const evidence = NativeCapturePackageSchema.shape.nativeEvidence.parse(input.nativeEvidence);
+  return sha256([
+    "MeasuredByNovaPublicationSignatureV1",
+    bindingHash,
+    keyId,
+    fingerprint,
+    evidence.adapter,
+    String(evidence.adapterVersion),
+    evidence.platform,
+    evidence.consent.method,
+    evidence.consent.eventId,
+    evidence.consent.occurredAt,
+    ""
+  ].join("\n"));
+}
+
 export function verifyPublicationCapturePackage(
   packageInput: unknown,
   artifacts: CaptureArtifactContent[],
@@ -179,7 +205,12 @@ export function verifyPublicationCapturePackage(
   if (capturePackage.source === "manual_upload") {
     codes.push("manual_upload");
   } else {
-    const payloadHash = capturePackagePayloadSha256(capturePackage.binding);
+    const payloadHash = capturePackageSignaturePayloadSha256({
+      binding: capturePackage.binding,
+      keyId: capturePackage.signature.keyId,
+      publicKeyFingerprintSha256: capturePackage.signature.publicKeyFingerprintSha256,
+      nativeEvidence: capturePackage.nativeEvidence
+    });
     if (capturePackage.signature.signedPayloadSha256 !== payloadHash) {
       codes.push("signed_payload_hash_mismatch");
     } else {

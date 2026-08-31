@@ -1,7 +1,7 @@
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
-  capturePackagePayloadSha256,
+  capturePackageSignaturePayloadSha256,
   classifyPublicTrust,
   customerRatingVisibility,
   InternalTrustScoresSchema,
@@ -33,18 +33,20 @@ const binding = {
 
 function signedPackage() {
   const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-  const payloadHash = capturePackagePayloadSha256(binding);
+  const publicKeyFingerprintSha256 = createHash("sha256").update(publicKey.export({ type: "spki", format: "der" })).digest("hex");
+  const nativeEvidence = { adapter: "measured-native-macos" as const, adapterVersion: 1 as const, platform: "macos" as const, consent: { method: "device_owner_authentication" as const, eventId: "6e5a0fe7-23a7-4ac5-87ea-61b4654df129", occurredAt: "2026-08-31T20:00:00.000Z" } };
+  const payloadHash = capturePackageSignaturePayloadSha256({ binding, keyId: "native-key-1", publicKeyFingerprintSha256, nativeEvidence });
   const capturePackage = PublicationCapturePackageSchema.parse({
     source: "native_app",
     binding,
     signature: {
       algorithm: "Ed25519",
       keyId: "native-key-1",
-      publicKeyFingerprintSha256: createHash("sha256").update(publicKey.export({ type: "spki", format: "der" })).digest("hex"),
+      publicKeyFingerprintSha256,
       signedPayloadSha256: payloadHash,
       valueBase64: sign(null, Buffer.from(payloadHash, "hex"), privateKey).toString("base64")
     },
-    nativeEvidence: { adapter: "measured-native-macos", adapterVersion: 1, platform: "macos", consent: { method: "device_owner_authentication", eventId: "6e5a0fe7-23a7-4ac5-87ea-61b4654df129", occurredAt: "2026-08-31T20:00:00.000Z" } }
+    nativeEvidence
   });
   return { capturePackage, publicKey };
 }
@@ -78,6 +80,26 @@ describe("publication trust contract", () => {
       capturePackage,
       packageVerification: verification
     })).toMatchObject({ category: "reference", verifiedScopeIds: [], unverifiedRequiredScopeIds: ["dimensions", "materials"] });
+  });
+
+  it("fails closed when native consent or approved identity evidence is changed", () => {
+    const { capturePackage, publicKey } = signedPackage();
+    if (capturePackage.source !== "native_app") throw new Error("test_native_package_required");
+    const changedConsent = {
+      ...capturePackage,
+      nativeEvidence: {
+        ...capturePackage.nativeEvidence,
+        consent: { ...capturePackage.nativeEvidence.consent, eventId: "3ad10b99-988d-4281-adf1-b3eed4f42859" }
+      }
+    };
+    expect(verifyPublicationCapturePackage(changedConsent, [artifact], () => publicKey).codes)
+      .toContain("signed_payload_hash_mismatch");
+    const changedFingerprint = {
+      ...capturePackage,
+      signature: { ...capturePackage.signature, publicKeyFingerprintSha256: "0".repeat(64) }
+    };
+    expect(verifyPublicationCapturePackage(changedFingerprint, [artifact], () => publicKey).codes)
+      .toEqual(expect.arrayContaining(["signed_payload_hash_mismatch", "signing_key_fingerprint_mismatch"]));
   });
 
   it("keeps manual uploads as reference regardless of verified evidence declarations", () => {
