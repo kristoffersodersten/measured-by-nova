@@ -63,6 +63,12 @@ const UiDeliveryArtifactSchema = z.object({
 
 const CustomerEvidenceSchema = z.object({
   trustCategory: z.enum(["verified", "partially_verified", "reference", "disputed"]),
+  signerIdentity: z.object({
+    keyId: z.string().min(1).max(120),
+    publicKeyFingerprintSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    consentEventId: z.string().uuid(),
+    consentOccurredAt: z.string().datetime({ offset: true })
+  }).strict().optional(),
   measurements: z.array(z.object({ id: z.string().min(1).max(120), label: z.string().min(1).max(160), value: z.number().finite(), unit: z.enum(["mm", "deg", "percent"]), tolerance: z.number().finite().positive().optional(), confidence: z.enum(["low", "medium", "high"]), source: z.enum(["permit_pdf", "manual_measurement", "photo_inferred", "unknown", "drawing", "calibrated_anchor"]), claimStatus: z.literal("reference") }).strict()).max(1000),
   materials: z.array(z.object({ id: z.string().min(1).max(120), label: z.string().min(1).max(120), target: z.string().min(1).max(120), category: z.string().min(1).max(120).optional(), provenance: z.string().min(1).max(120).optional(), confidence: z.enum(["low", "medium", "high"]), source: z.enum(["manual_measurement", "photo_reference", "user_declared"]).optional(), sourcePhotos: z.array(z.string().min(1).max(240)).max(1000).optional(), claimStatus: z.literal("reference") }).strict()).max(1000),
   conditions: z.array(z.object({ id: z.string().min(1).max(120), type: z.string().min(1).max(120).optional(), severity: z.string().min(1).max(120).optional(), verification: z.string().min(1).max(120).optional(), sourcePhotos: z.array(z.string().min(1).max(240)).max(1000).optional(), status: z.enum(["verified", "reference", "disputed"]) }).strict()).max(10_000),

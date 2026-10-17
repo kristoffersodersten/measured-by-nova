@@ -6,6 +6,8 @@ const DEFAULT_OUTPUT_DIR = path.resolve(process.cwd(), "outputs");
 export function loadConfig(): BlenderConfig {
   return BlenderConfigSchema.parse({
     blenderPath: process.env.BLENDER_PATH,
+    nativePublicationSignerPath: process.env.MEASURED_NATIVE_SIGNER_PATH,
+    nativePublicationSignerSha256: process.env.MEASURED_NATIVE_SIGNER_SHA256,
     outputDir: process.env.BLENDER_OUTPUT_DIR ?? DEFAULT_OUTPUT_DIR,
     timeoutMs: process.env.BLENDER_TIMEOUT_MS ? Number(process.env.BLENDER_TIMEOUT_MS) : undefined
   });

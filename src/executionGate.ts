@@ -6,6 +6,7 @@ export const ExecutionOperationSchema = z.enum([
   "export-model",
   "generate-web-viewer",
   "verify-publication-capture",
+  "sign-publication-capture",
   "export-drawings",
   "export-facade-pack",
   "export-template"
@@ -84,6 +85,7 @@ const OperationWriteScopes: Record<ExecutionOperation, ExecutionScope[]> = {
   "export-model": ["blender-output", "manifest"],
   "generate-web-viewer": ["project-state", "blender-output", "manifest"],
   "verify-publication-capture": ["project-state", "manifest"],
+  "sign-publication-capture": ["manifest"],
   "export-drawings": ["blender-output", "manifest"],
   "export-facade-pack": ["project-state", "blender-output", "manifest"],
   "export-template": ["project-state", "blender-output", "manifest"]
