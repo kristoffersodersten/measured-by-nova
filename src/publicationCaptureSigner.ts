@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -15,6 +15,15 @@ import {
 
 const execFileAsync = promisify(execFile);
 const KeyIdSchema = z.string().min(1).max(120).regex(/^[A-Za-z0-9_.-]+$/);
+export const NATIVE_SIGNER_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
+
+export async function resolveNativeSignerExecutable(executablePathInput: string): Promise<string> {
+  const executablePath = path.resolve(executablePathInput);
+  if ((await lstat(executablePath)).isSymbolicLink()) {
+    throw new Error("publication_native_signer_symlink_forbidden");
+  }
+  return realpath(executablePath);
+}
 
 export const NativePublicationSigningInputSchema = z.object({
   binding: CapturePackageBindingSchema,
@@ -39,9 +48,7 @@ export async function signNativePublicationCapture(input: {
 }): Promise<PublicationCapturePackage> {
   const payload = NativePublicationSigningInputSchema.parse({ binding: input.binding, keyId: input.keyId });
   if (process.platform !== "darwin") throw new Error("publication_native_signer_macos_required");
-  const executablePath = path.resolve(input.executablePath);
-  const resolvedExecutable = await realpath(executablePath);
-  if (resolvedExecutable !== executablePath) throw new Error("publication_native_signer_symlink_forbidden");
+  const resolvedExecutable = await resolveNativeSignerExecutable(input.executablePath);
   const executableStat = await stat(resolvedExecutable);
   if (!executableStat.isFile() || (executableStat.mode & 0o111) === 0 || executableStat.size > 16 * 1024 * 1024 ||
       executableStat.uid !== 0 || (executableStat.mode & 0o022) !== 0) {
@@ -67,7 +74,7 @@ export async function signNativePublicationCapture(input: {
     ], {
       encoding: "utf8",
       timeout: Math.min(input.timeoutMs ?? 120_000, 300_000),
-      maxBuffer: 1024 * 1024,
+      maxBuffer: NATIVE_SIGNER_MAX_BUFFER_BYTES,
       windowsHide: true,
       env: { PATH: "/usr/bin:/bin:/usr/sbin:/sbin", HOME: os.homedir() }
     });
