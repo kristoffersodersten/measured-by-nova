@@ -81,10 +81,10 @@ public enum PublicationSigner {
 
     public static func canonicalPayload(_ binding: CaptureBinding) throws -> Data {
         try validate(binding)
-        let scopes = binding.evidenceScopes.sorted { $0.id < $1.id }.map { scope in
+        let scopes = binding.evidenceScopes.sorted { utf8Precedes($0.id, $1.id) }.map { scope in
             "{\"id\":\(quoted(scope.id)),\"kind\":\(quoted(scope.kind)),\"required\":\(scope.required),\"verified\":\(scope.verified)}"
         }.joined(separator: ",")
-        let manifest = binding.manifest.sorted { $0.path < $1.path }.map { entry in
+        let manifest = binding.manifest.sorted { utf8Precedes($0.path, $1.path) }.map { entry in
             "{\"path\":\(quoted(entry.path)),\"sha256\":\(quoted(entry.sha256)),\"sizeBytes\":\(entry.sizeBytes)}"
         }.joined(separator: ",")
         let json = "{\"schemaVersion\":\(binding.schemaVersion),\"packageId\":\(quoted(binding.packageId)),\"projectId\":\(quoted(binding.projectId)),\"objectId\":\(quoted(binding.objectId)),\"captureProtocolId\":\(quoted(binding.captureProtocolId)),\"kitId\":\(quoted(binding.kitId)),\"commissioningPartyId\":\(quoted(binding.commissioningPartyId)),\"capturedAt\":\(quoted(binding.capturedAt)),\"evidenceScopes\":[\(scopes)],\"manifest\":[\(manifest)]}"
@@ -207,9 +207,25 @@ public enum PublicationSigner {
     }
 
     private static func quoted(_ value: String) -> String {
-        let data = try! JSONSerialization.data(withJSONObject: [value])
-        let encoded = String(decoding: data, as: UTF8.self)
-        return String(encoded.dropFirst().dropLast())
+        var encoded = "\""
+        for scalar in value.unicodeScalars {
+            switch scalar.value {
+            case 0x08: encoded += "\\b"
+            case 0x09: encoded += "\\t"
+            case 0x0a: encoded += "\\n"
+            case 0x0c: encoded += "\\f"
+            case 0x0d: encoded += "\\r"
+            case 0x22: encoded += "\\\""
+            case 0x5c: encoded += "\\\\"
+            case 0x00...0x1f: encoded += String(format: "\\u%04x", scalar.value)
+            default: encoded.unicodeScalars.append(scalar)
+            }
+        }
+        return encoded + "\""
+    }
+
+    private static func utf8Precedes(_ left: String, _ right: String) -> Bool {
+        left.utf8.lexicographicallyPrecedes(right.utf8)
     }
 
     private static func ed25519SubjectPublicKeyInfo(_ raw: Data) -> Data {

@@ -121,6 +121,10 @@ function sha256(content: Uint8Array | string): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
+function compareUtf8(left: string, right: string): number {
+  return Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8"));
+}
+
 function canonicalBinding(binding: z.infer<typeof CapturePackageBindingSchema>): string {
   return JSON.stringify({
     schemaVersion: binding.schemaVersion,
@@ -131,9 +135,9 @@ function canonicalBinding(binding: z.infer<typeof CapturePackageBindingSchema>):
     kitId: binding.kitId,
     commissioningPartyId: binding.commissioningPartyId,
     capturedAt: binding.capturedAt,
-    evidenceScopes: [...binding.evidenceScopes].sort((left, right) => left.id.localeCompare(right.id)),
+    evidenceScopes: [...binding.evidenceScopes].sort((left, right) => compareUtf8(left.id, right.id)),
     manifest: [...binding.manifest]
-      .sort((left, right) => left.path.localeCompare(right.path))
+      .sort((left, right) => compareUtf8(left.path, right.path))
       .map(({ path, sha256: artifactHash, sizeBytes }) => ({ path, sha256: artifactHash, sizeBytes }))
   });
 }

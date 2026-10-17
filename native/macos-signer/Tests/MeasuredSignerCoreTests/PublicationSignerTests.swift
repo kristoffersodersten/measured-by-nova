@@ -23,6 +23,34 @@ final class PublicationSignerTests: XCTestCase {
         )
     }
 
+    func testCanonicalPayloadUsesUtf8OrderingAndUnescapedSlashes() throws {
+        let crossRuntimeBinding = CaptureBinding(
+            schemaVersion: binding.schemaVersion,
+            packageId: binding.packageId,
+            projectId: binding.projectId,
+            objectId: binding.objectId,
+            captureProtocolId: binding.captureProtocolId,
+            kitId: binding.kitId,
+            commissioningPartyId: binding.commissioningPartyId,
+            capturedAt: binding.capturedAt,
+            evidenceScopes: [
+                EvidenceScope(id: "a", kind: "measurement", required: true, verified: true),
+                EvidenceScope(id: "A", kind: "known_deviation", required: false, verified: false)
+            ],
+            manifest: [
+                ManifestEntry(path: "evidence/photos/a.jpg", sha256: String(repeating: "a", count: 64), sizeBytes: 24),
+                ManifestEntry(path: "Evidence/photos/a.jpg", sha256: String(repeating: "b", count: 64), sizeBytes: 25)
+            ]
+        )
+
+        let canonical = try PublicationSigner.canonicalPayload(crossRuntimeBinding)
+        XCTAssertFalse(String(decoding: canonical, as: UTF8.self).contains("\\/"))
+        XCTAssertEqual(
+            try PublicationSigner.payloadHashHex(crossRuntimeBinding),
+            "0967155da198d56683e08915eeb4a37810414207220992e04bb70d559269fea9"
+        )
+    }
+
     func testSignatureBindsIdentityAndConsent() throws {
         let key = try Curve25519.Signing.PrivateKey(rawRepresentation: Data(repeating: 7, count: 32))
         let package = try PublicationSigner.sign(

@@ -117,7 +117,9 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
         timeoutMs: config.timeoutMs
       });
       const outputPath = safeOutputPath(config.outputDir, payload.outputPackagePath);
+      await assertOutputParentWithinRoot(config.outputDir, outputPath);
       await mkdir(path.dirname(outputPath), { recursive: true });
+      await assertOutputParentWithinRoot(config.outputDir, outputPath);
       await writeFile(outputPath, `${JSON.stringify(capturePackage)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
       await appendRequestLog(config, payload.binding.projectId, req, "sign_publication_capture_package", {
         projectId: payload.binding.projectId,
@@ -1342,7 +1344,7 @@ async function assertExistingPathWithinRoot(root: string, filePath: string): Pro
   if (realFile !== realRoot && !realFile.startsWith(`${realRoot}${path.sep}`)) throw new Error("path_escape");
 }
 
-async function assertOutputParentWithinRoot(root: string, filePath: string): Promise<void> {
+export async function assertOutputParentWithinRoot(root: string, filePath: string): Promise<void> {
   const realRoot = await realpath(root);
   let ancestor = path.dirname(filePath);
   while (!(await pathExists(ancestor))) {

@@ -1,6 +1,7 @@
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
+  capturePackagePayloadSha256,
   capturePackageSignaturePayloadSha256,
   classifyPublicTrust,
   customerRatingVisibility,
@@ -52,6 +53,27 @@ function signedPackage() {
 }
 
 describe("publication trust contract", () => {
+  it("uses locale-independent UTF-8 ordering for the cross-runtime payload", () => {
+    expect(capturePackagePayloadSha256({
+      schemaVersion: 1,
+      packageId: "native-capture-1",
+      projectId: "measured-project-1",
+      objectId: "object-1",
+      captureProtocolId: "protocol-1",
+      kitId: "kit-1",
+      commissioningPartyId: "party-1",
+      capturedAt: "2026-08-30T10:00:00Z",
+      evidenceScopes: [
+        { id: "a", kind: "measurement", required: true, verified: true },
+        { id: "A", kind: "known_deviation", required: false, verified: false }
+      ],
+      manifest: [
+        { path: "evidence/photos/a.jpg", sha256: "a".repeat(64), sizeBytes: 24 },
+        { path: "Evidence/photos/a.jpg", sha256: "b".repeat(64), sizeBytes: 25 }
+      ]
+    })).toBe("0967155da198d56683e08915eeb4a37810414207220992e04bb70d559269fea9");
+  });
+
   it("verifies a complete unchanged native capture package and classifies it as verified", () => {
     const { capturePackage, publicKey } = signedPackage();
     const verification = verifyPublicationCapturePackage(capturePackage, [artifact], () => publicKey);

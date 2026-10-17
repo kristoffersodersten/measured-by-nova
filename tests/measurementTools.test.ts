@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -12,7 +12,7 @@ import {
   DigitalViewingCaptureSchema,
   DigitalViewingDeliveryPackageManifestSchema
 } from "../src/digitalViewingContracts.js";
-import { registerMeasurementTools } from "../src/measurementTools.js";
+import { assertOutputParentWithinRoot, registerMeasurementTools } from "../src/measurementTools.js";
 import type { ExecutionIntent, ExecutionOperation } from "../src/executionGate.js";
 import { MeasurementProjectSchema } from "../src/measurementContracts.js";
 import { buildModelLock } from "../src/modelLock.js";
@@ -37,6 +37,20 @@ type RegisteredTool = {
   description: string;
   handler: (input: unknown) => Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }>;
 };
+
+describe("measurement output boundary", () => {
+  it("rejects a signed-package output parent that escapes through a symlink", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "measured-signing-root-"));
+    const outsideDir = await mkdtemp(path.join(tmpdir(), "measured-signing-outside-"));
+    try {
+      await symlink(outsideDir, path.join(outputDir, "escaped"));
+      await expect(assertOutputParentWithinRoot(outputDir, path.join(outputDir, "escaped", "capture.json")))
+        .rejects.toThrow("path_escape");
+    } finally {
+      await Promise.all([rm(outputDir, { recursive: true, force: true }), rm(outsideDir, { recursive: true, force: true })]);
+    }
+  });
+});
 
 function loadCarportCapture(): unknown {
   return JSON.parse(readFileSync("fixtures/digital-viewing-carport-capture.json", "utf8")) as unknown;
