@@ -52,6 +52,9 @@ export async function loadUiProjectWorkspace(config: UiRuntimeConfig, projectId:
     { id: "capture", label: captureReady ? captureTrustLabel(projectId, trust?.classification) : `Capture evidence incomplete for ${projectId}`, topology: "system", status: captureReady && trust !== null && trust.classification.category !== "disputed" ? "ready" : "blocked", provenance: trust ? `measurement-projects/${projectId}/.publication-trust.json` : `measurement-projects/${projectId}/project.json`, ...(captureReady && trust !== null && trust.classification.category !== "disputed" ? {} : { blockingReason: trust?.classification.category === "disputed" ? "Live capture package evidence no longer matches its verified trust record." : captureReady ? "Verify an explicit native or manual capture package before publication." : "At least one photo and one measurement or profile are required." }), operatorApprovalRequired: false },
     { id: "validation", label: validationPassed ? "Project validation passed" : "Project validation not passing", topology: "execution", status: validationPassed ? "ready" : "blocked", provenance: "project.validation", ...(validationPassed ? {} : { blockingReason: "Complete capture evidence, then run and pass declared project validation before delivery." }), operatorApprovalRequired: false }
   ];
+  if (trust?.nativeSignerEvidence) {
+    surface.panels[0].states[0].label += ` · signer ${trust.nativeSignerEvidence.keyId} ${trust.nativeSignerEvidence.publicKeyFingerprintSha256.slice(0, 12)} · consent ${trust.nativeSignerEvidence.consentOccurredAt}`;
+  }
   surface.panels[1].states = [
     { id: "portable-delivery", label: portableExport.status === "ready" ? `Blender delivery verified · ${portableExport.evidence.requestedFormats.join(", ")}` : "Blender delivery not verified", topology: "infrastructure", status: deliveryBlockingReason ? "blocked" : portableExport.status === "ready" ? "ready" : "pending", provenance: project.artifacts.portableExportManifest ?? "portable-export-manifest", ...(deliveryBlockingReason ? { blockingReason: deliveryBlockingReason } : {}), operatorApprovalRequired: false },
     { id: "model-lock", label: lock.ok ? "Reviewed model lock verified" : "Reviewed model lock invalid", topology: "human-intervention", status: lock.ok ? "ready" : "blocked", provenance: project.modelLock.modelArtifact ?? "model-lock-contract", ...(lock.ok ? {} : { blockingReason: lock.blocking.map((reason) => reason.code).join(", ") }), operatorApprovalRequired: true }
@@ -65,8 +68,15 @@ export async function loadUiProjectWorkspace(config: UiRuntimeConfig, projectId:
     ...(viewerEvidence ? { viewerUrl: `/viewer/${encodeURIComponent(projectId)}/index.html` } : {})
   } : {};
   const detailedEvidence = captureTrusted && validationPassed && lock.ok && operatorDecision === null ? await readCustomerEvidencePackage(config, project) : null;
-  const customerEvidence = captureTrusted && validationPassed && lock.ok && operatorDecision === null && trust ? detailedEvidence ? { ...detailedEvidence, trustCategory: trust.classification.category } : {
+  const signerIdentity = trust?.nativeSignerEvidence ? {
+    keyId: trust.nativeSignerEvidence.keyId,
+    publicKeyFingerprintSha256: trust.nativeSignerEvidence.publicKeyFingerprintSha256,
+    consentEventId: trust.nativeSignerEvidence.consentEventId,
+    consentOccurredAt: trust.nativeSignerEvidence.consentOccurredAt
+  } : undefined;
+  const customerEvidence = captureTrusted && validationPassed && lock.ok && operatorDecision === null && trust ? detailedEvidence ? { ...detailedEvidence, trustCategory: trust.classification.category, ...(signerIdentity ? { signerIdentity } : {}) } : {
     trustCategory: trust.classification.category,
+    ...(signerIdentity ? { signerIdentity } : {}),
     measurements: project.dimensions.map((entry, index) => ({ id: `dimension-${index + 1}`, label: entry.label, value: entry.valueMm, unit: "mm" as const, confidence: entry.confidence, source: entry.source, claimStatus: "reference" as const })),
     materials: project.materialNotes.map((entry, index) => ({ id: `material-${index + 1}`, label: entry.material, target: entry.elementId ?? entry.facade ?? "unspecified", confidence: entry.confidence, source: entry.source, claimStatus: "reference" as const })),
     conditions: trust.evidenceScopes.filter((scope) => scope.kind === "known_deviation").map((scope) => ({ id: scope.id, status: trust.classification.disputedScopeIds.includes(scope.id) ? "disputed" as const : trust.classification.verifiedScopeIds.includes(scope.id) ? "verified" as const : "reference" as const })),

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -12,7 +12,7 @@ import {
   DigitalViewingCaptureSchema,
   DigitalViewingDeliveryPackageManifestSchema
 } from "../src/digitalViewingContracts.js";
-import { registerMeasurementTools } from "../src/measurementTools.js";
+import { assertOutputParentWithinRoot, registerMeasurementTools } from "../src/measurementTools.js";
 import type { ExecutionIntent, ExecutionOperation } from "../src/executionGate.js";
 import { MeasurementProjectSchema } from "../src/measurementContracts.js";
 import { buildModelLock } from "../src/modelLock.js";
@@ -37,6 +37,20 @@ type RegisteredTool = {
   description: string;
   handler: (input: unknown) => Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }>;
 };
+
+describe("measurement output boundary", () => {
+  it("rejects a signed-package output parent that escapes through a symlink", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "measured-signing-root-"));
+    const outsideDir = await mkdtemp(path.join(tmpdir(), "measured-signing-outside-"));
+    try {
+      await symlink(outsideDir, path.join(outputDir, "escaped"));
+      await expect(assertOutputParentWithinRoot(outputDir, path.join(outputDir, "escaped", "capture.json")))
+        .rejects.toThrow("path_escape");
+    } finally {
+      await Promise.all([rm(outputDir, { recursive: true, force: true }), rm(outsideDir, { recursive: true, force: true })]);
+    }
+  });
+});
 
 function loadCarportCapture(): unknown {
   return JSON.parse(readFileSync("fixtures/digital-viewing-carport-capture.json", "utf8")) as unknown;
@@ -166,6 +180,33 @@ function makeToolHarness(outputDir: string): Map<string, RegisteredTool> {
 }
 
 describe("measurement MCP digital viewing tools", () => {
+  it("exposes the production signer and fails closed without an explicit native adapter", async () => {
+    const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
+    const artifact = Buffer.from("native signer boundary");
+    const tools = makeToolHarness(outputDir);
+    const result = await tools.get("sign_publication_capture_package")!.handler({
+      binding: {
+        schemaVersion: 1,
+        packageId: "native-package-1",
+        projectId: "project-1",
+        objectId: "object-1",
+        captureProtocolId: "protocol-1",
+        kitId: "kit-1",
+        commissioningPartyId: "party-1",
+        capturedAt: "2026-08-31T20:00:00.000Z",
+        evidenceScopes: [{ id: "dimensions", kind: "measurement", required: true, verified: true }],
+        manifest: [{ path: "evidence.json", sha256: createHash("sha256").update(artifact).digest("hex"), sizeBytes: artifact.byteLength }]
+      },
+      keyId: "native-key-1",
+      outputPackagePath: "captures/native-package-1/capture-package.json",
+      executionIntent: executionIntent("sign-publication-capture", ["manifest"])
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.parse(result.content[0].text)).toMatchObject({
+      error: { code: "publication_native_signer_not_configured" }
+    });
+  });
+
   it("keeps a real capture fixture export-blocked until human model review lock", async () => {
     const outputDir = await mkdtemp(path.join(tmpdir(), "nova-measured-tools-"));
     const tools = makeToolHarness(outputDir);

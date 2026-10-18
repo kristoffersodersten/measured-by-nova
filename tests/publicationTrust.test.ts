@@ -2,6 +2,7 @@ import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   capturePackagePayloadSha256,
+  capturePackageSignaturePayloadSha256,
   classifyPublicTrust,
   customerRatingVisibility,
   InternalTrustScoresSchema,
@@ -33,21 +34,46 @@ const binding = {
 
 function signedPackage() {
   const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-  const payloadHash = capturePackagePayloadSha256(binding);
+  const publicKeyFingerprintSha256 = createHash("sha256").update(publicKey.export({ type: "spki", format: "der" })).digest("hex");
+  const nativeEvidence = { adapter: "measured-native-macos" as const, adapterVersion: 1 as const, platform: "macos" as const, consent: { method: "device_owner_authentication" as const, eventId: "6e5a0fe7-23a7-4ac5-87ea-61b4654df129", occurredAt: "2026-08-31T20:00:00.000Z" } };
+  const payloadHash = capturePackageSignaturePayloadSha256({ binding, keyId: "native-key-1", publicKeyFingerprintSha256, nativeEvidence });
   const capturePackage = PublicationCapturePackageSchema.parse({
     source: "native_app",
     binding,
     signature: {
       algorithm: "Ed25519",
       keyId: "native-key-1",
+      publicKeyFingerprintSha256,
       signedPayloadSha256: payloadHash,
       valueBase64: sign(null, Buffer.from(payloadHash, "hex"), privateKey).toString("base64")
-    }
+    },
+    nativeEvidence
   });
   return { capturePackage, publicKey };
 }
 
 describe("publication trust contract", () => {
+  it("uses locale-independent UTF-8 ordering for the cross-runtime payload", () => {
+    expect(capturePackagePayloadSha256({
+      schemaVersion: 1,
+      packageId: "native-capture-1",
+      projectId: "measured-project-1",
+      objectId: "object-1",
+      captureProtocolId: "protocol-1",
+      kitId: "kit-1",
+      commissioningPartyId: "party-1",
+      capturedAt: "2026-08-30T10:00:00Z",
+      evidenceScopes: [
+        { id: "a", kind: "measurement", required: true, verified: true },
+        { id: "A", kind: "known_deviation", required: false, verified: false }
+      ],
+      manifest: [
+        { path: "evidence/photos/a.jpg", sha256: "a".repeat(64), sizeBytes: 24 },
+        { path: "Evidence/photos/a.jpg", sha256: "b".repeat(64), sizeBytes: 25 }
+      ]
+    })).toBe("0967155da198d56683e08915eeb4a37810414207220992e04bb70d559269fea9");
+  });
+
   it("verifies a complete unchanged native capture package and classifies it as verified", () => {
     const { capturePackage, publicKey } = signedPackage();
     const verification = verifyPublicationCapturePackage(capturePackage, [artifact], () => publicKey);
@@ -76,6 +102,26 @@ describe("publication trust contract", () => {
       capturePackage,
       packageVerification: verification
     })).toMatchObject({ category: "reference", verifiedScopeIds: [], unverifiedRequiredScopeIds: ["dimensions", "materials"] });
+  });
+
+  it("fails closed when native consent or approved identity evidence is changed", () => {
+    const { capturePackage, publicKey } = signedPackage();
+    if (capturePackage.source !== "native_app") throw new Error("test_native_package_required");
+    const changedConsent = {
+      ...capturePackage,
+      nativeEvidence: {
+        ...capturePackage.nativeEvidence,
+        consent: { ...capturePackage.nativeEvidence.consent, eventId: "3ad10b99-988d-4281-adf1-b3eed4f42859" }
+      }
+    };
+    expect(verifyPublicationCapturePackage(changedConsent, [artifact], () => publicKey).codes)
+      .toContain("signed_payload_hash_mismatch");
+    const changedFingerprint = {
+      ...capturePackage,
+      signature: { ...capturePackage.signature, publicKeyFingerprintSha256: "0".repeat(64) }
+    };
+    expect(verifyPublicationCapturePackage(changedFingerprint, [artifact], () => publicKey).codes)
+      .toEqual(["signed_payload_hash_mismatch"]);
   });
 
   it("keeps manual uploads as reference regardless of verified evidence declarations", () => {

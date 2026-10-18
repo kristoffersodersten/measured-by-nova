@@ -1,4 +1,4 @@
-import { createHash, verify as verifySignature, type KeyObject } from "node:crypto";
+import { createHash, createPublicKey, verify as verifySignature, type KeyObject } from "node:crypto";
 import { z } from "zod";
 
 const IdSchema = z.string().min(1).max(120).regex(/^[a-zA-Z0-9_.-]+$/);
@@ -59,8 +59,19 @@ const NativeCapturePackageSchema = z.object({
   signature: z.object({
     algorithm: z.literal("Ed25519"),
     keyId: IdSchema,
+    publicKeyFingerprintSha256: Sha256Schema,
     signedPayloadSha256: Sha256Schema,
     valueBase64: z.string().min(1).max(512).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/)
+  }).strict(),
+  nativeEvidence: z.object({
+    adapter: z.literal("measured-native-macos"),
+    adapterVersion: z.literal(1),
+    platform: z.literal("macos"),
+    consent: z.object({
+      method: z.literal("device_owner_authentication"),
+      eventId: z.string().uuid(),
+      occurredAt: z.string().datetime({ offset: true })
+    }).strict()
   }).strict()
 }).strict();
 
@@ -74,6 +85,7 @@ export const PublicationCapturePackageSchema = z.discriminatedUnion("source", [
   ManualCapturePackageSchema
 ]);
 export type PublicationCapturePackage = z.infer<typeof PublicationCapturePackageSchema>;
+type NativeCapturePackage = Extract<PublicationCapturePackage, { source: "native_app" }>;
 
 export interface CaptureArtifactContent {
   path: string;
@@ -92,6 +104,7 @@ export const CapturePackageVerificationCodeSchema = z.enum([
   "signed_payload_hash_mismatch",
   "signing_key_unknown",
   "signing_key_revoked",
+  "signing_key_fingerprint_mismatch",
   "signature_invalid"
 ]);
 export type CapturePackageVerificationCode = z.infer<typeof CapturePackageVerificationCodeSchema>;
@@ -108,6 +121,10 @@ function sha256(content: Uint8Array | string): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
+function compareUtf8(left: string, right: string): number {
+  return Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8"));
+}
+
 function canonicalBinding(binding: z.infer<typeof CapturePackageBindingSchema>): string {
   return JSON.stringify({
     schemaVersion: binding.schemaVersion,
@@ -118,9 +135,9 @@ function canonicalBinding(binding: z.infer<typeof CapturePackageBindingSchema>):
     kitId: binding.kitId,
     commissioningPartyId: binding.commissioningPartyId,
     capturedAt: binding.capturedAt,
-    evidenceScopes: [...binding.evidenceScopes].sort((left, right) => left.id.localeCompare(right.id)),
+    evidenceScopes: [...binding.evidenceScopes].sort((left, right) => compareUtf8(left.id, right.id)),
     manifest: [...binding.manifest]
-      .sort((left, right) => left.path.localeCompare(right.path))
+      .sort((left, right) => compareUtf8(left.path, right.path))
       .map(({ path, sha256: artifactHash, sizeBytes }) => ({ path, sha256: artifactHash, sizeBytes }))
   });
 }
@@ -129,6 +146,31 @@ export function capturePackagePayloadSha256(
   binding: z.infer<typeof CapturePackageBindingSchema>
 ): string {
   return sha256(canonicalBinding(CapturePackageBindingSchema.parse(binding)));
+}
+
+export function capturePackageSignaturePayloadSha256(input: {
+  binding: CapturePackageBinding;
+  keyId: string;
+  publicKeyFingerprintSha256: string;
+  nativeEvidence: NativeCapturePackage["nativeEvidence"];
+}): string {
+  const bindingHash = capturePackagePayloadSha256(input.binding);
+  const keyId = IdSchema.parse(input.keyId);
+  const fingerprint = Sha256Schema.parse(input.publicKeyFingerprintSha256);
+  const evidence = NativeCapturePackageSchema.shape.nativeEvidence.parse(input.nativeEvidence);
+  return sha256([
+    "MeasuredByNovaPublicationSignatureV1",
+    bindingHash,
+    keyId,
+    fingerprint,
+    evidence.adapter,
+    String(evidence.adapterVersion),
+    evidence.platform,
+    evidence.consent.method,
+    evidence.consent.eventId,
+    evidence.consent.occurredAt,
+    ""
+  ].join("\n"));
 }
 
 export function verifyPublicationCapturePackage(
@@ -167,7 +209,12 @@ export function verifyPublicationCapturePackage(
   if (capturePackage.source === "manual_upload") {
     codes.push("manual_upload");
   } else {
-    const payloadHash = capturePackagePayloadSha256(capturePackage.binding);
+    const payloadHash = capturePackageSignaturePayloadSha256({
+      binding: capturePackage.binding,
+      keyId: capturePackage.signature.keyId,
+      publicKeyFingerprintSha256: capturePackage.signature.publicKeyFingerprintSha256,
+      nativeEvidence: capturePackage.nativeEvidence
+    });
     if (capturePackage.signature.signedPayloadSha256 !== payloadHash) {
       codes.push("signed_payload_hash_mismatch");
     } else {
@@ -176,10 +223,18 @@ export function verifyPublicationCapturePackage(
         codes.push("signing_key_unknown");
       } else {
         try {
+          const publicKey = typeof signingKey === "string" || signingKey.type === "private"
+            ? createPublicKey(signingKey)
+            : signingKey;
+          if (publicKey.asymmetricKeyType !== "ed25519") {
+            codes.push("signature_invalid");
+          } else if (sha256(publicKey.export({ type: "spki", format: "der" })) !== capturePackage.signature.publicKeyFingerprintSha256) {
+            codes.push("signing_key_fingerprint_mismatch");
+          }
           const signatureValid = verifySignature(
             null,
             Buffer.from(payloadHash, "hex"),
-            signingKey,
+            publicKey,
             Buffer.from(capturePackage.signature.valueBase64, "base64")
           );
           if (!signatureValid) {
