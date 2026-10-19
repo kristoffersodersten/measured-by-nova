@@ -13,6 +13,13 @@ import { RealCarportCaptureSchema } from "../src/captureToFixture.js";
 const execFile = promisify(execFileCallback);
 const LegalBaseSha = "58e6cc3a349c25af17763ab76f4a1a0c889e3e9f";
 const UnauthorizedSignerRootSha = "79067d23e11f7ff979bd7b2c0409b3f72c00dd1c";
+const AllowedDemoChanges = [
+  "docs/carport-premium-demo.md",
+  "package.json",
+  "scripts/run-carport-demo.ts",
+  "src/demoManifest.ts",
+  "tests/carportDemo.test.ts"
+] as const;
 const FixturePath = "fixtures/real-capture-carport-minimal.json";
 const DefaultOutputDir = "output/carport-premium-demo";
 const CheckpointFilename = "carport-review-checkpoint.json";
@@ -245,13 +252,32 @@ function intent(operation: "lock-model" | "export-model" | "generate-web-viewer"
 
 async function verifyLegalCommitBoundary(repoRoot: string): Promise<void> {
   await git(repoRoot, ["cat-file", "-e", `${LegalBaseSha}^{commit}`]);
-  await git(repoRoot, ["cat-file", "-e", `${UnauthorizedSignerRootSha}^{commit}`]);
   await git(repoRoot, ["merge-base", "--is-ancestor", LegalBaseSha, "HEAD"]);
+  const changedPaths = (await git(repoRoot, ["diff", "--name-only", `${LegalBaseSha}..HEAD`])).split(/\r?\n/).filter(Boolean).sort();
+  if (changedPaths.join("\0") !== [...AllowedDemoChanges].sort().join("\0")) throw new Error(`legal_demo_diff_invalid:${changedPaths.join(",")}`);
+  const forbiddenPaths = ["native/macos-signer"];
+  for (const forbiddenPath of forbiddenPaths) {
+    if (await gitPathExists(repoRoot, forbiddenPath)) throw new Error(`unauthorized_signer_path_included:${forbiddenPath}`);
+  }
+  if (await gitCommitIsAncestor(repoRoot, UnauthorizedSignerRootSha)) throw new Error("unauthorized_signer_commit_included");
+}
+
+async function gitPathExists(repoRoot: string, relativePath: string): Promise<boolean> {
+  try { await git(repoRoot, ["cat-file", "-e", `HEAD:${relativePath}`]); return true; }
+  catch { return false; }
+}
+
+async function gitCommitIsAncestor(repoRoot: string, commit: string): Promise<boolean> {
   try {
-    await git(repoRoot, ["merge-base", "--is-ancestor", UnauthorizedSignerRootSha, "HEAD"]);
-    throw new Error("unauthorized_signer_commit_included");
+    await execFile("git", ["-C", repoRoot, "cat-file", "-e", `${commit}^{commit}`], { windowsHide: true });
+  } catch { return false; }
+  try {
+    await execFile("git", ["-C", repoRoot, "merge-base", "--is-ancestor", commit, "HEAD"], { windowsHide: true });
+    return true;
   } catch (error) {
-    if (error instanceof Error && error.message === "unauthorized_signer_commit_included") throw error;
+    const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+    if (code === 1) return false;
+    throw new Error(`git_preflight_failed:merge-base --is-ancestor ${commit} HEAD:${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
