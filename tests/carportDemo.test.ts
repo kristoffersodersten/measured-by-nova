@@ -9,7 +9,7 @@ import { buildMissingWidthCapture, parseDemoArguments } from "../scripts/run-car
 
 describe("carport premium demo support", () => {
   it("parses explicit reset, Blender, and output options", () => {
-    const result = parseDemoArguments(["--prepare", "--reset", "--output-dir", "demo-output", "--blender", "runtime/blender"]);
+    const result = parseDemoArguments(["--", "--prepare", "--reset", "--output-dir", "demo-output", "--blender", "runtime/blender"]);
     expect(result).toEqual({ reset: true, phase: "prepare", outputDir: path.resolve("demo-output"), blenderPath: path.resolve("runtime/blender"), reviewConfirmed: false });
   });
 

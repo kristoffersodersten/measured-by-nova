@@ -55,6 +55,7 @@ export function parseDemoArguments(argv: string[]): DemoArguments {
   let reviewConfirmed = false;
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
+    if (argument === "--") continue;
     if (argument === "--reset") reset = true;
     else if (argument === "--prepare") phase = phase ? duplicatePhase() : "prepare";
     else if (argument === "--deliver") phase = phase ? duplicatePhase() : "deliver";
