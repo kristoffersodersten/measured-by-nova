@@ -18,8 +18,10 @@ const AllowedDemoChanges = [
   "package.json",
   "scripts/run-carport-demo.ts",
   "src/demoManifest.ts",
+  "src/measurementTools.ts",
   "src/viewRegistry.ts",
   "tests/carportDemo.test.ts",
+  "tests/elevationViews.integration.test.ts",
   "tests/viewRegistry.test.ts"
 ] as const;
 const FixturePath = "fixtures/real-capture-carport-minimal.json";
@@ -123,9 +125,10 @@ async function prepareReview(args: Extract<DemoArguments, { phase: "prepare" }>,
 
   await timed(timingsMs, "captureRecovery", () => invoke(tools, "create_project_from_capture", capture));
   await timed(timingsMs, "generateModel", () => invoke(tools, "generate_measured_model", { projectId: capture.projectId }));
+  const views = await timed(timingsMs, "generateViews", () => invoke<{ artifacts: { blend?: string } }>(tools, "generate_elevation_views", { projectId: capture.projectId, views: ["plan", "north", "south", "east", "west", "section_a_a"] }));
   await timed(timingsMs, "validateModel", () => invoke(tools, "validate_model", { projectId: capture.projectId, checks: ["known_dimensions", "photo_orientation"] }));
-  await timed(timingsMs, "generateViews", () => invoke(tools, "generate_elevation_views", { projectId: capture.projectId, views: ["plan", "north", "south", "east", "west", "section_a_a"] }));
-  const reviewArtifact = await identifyDemoArtifact(args.outputDir, "reviewed-blender-model", `measurement-projects/${capture.projectId}/artifacts/${capture.projectId}.blend`);
+  if (!views.data?.artifacts.blend) throw new Error("review_artifact_missing");
+  const reviewArtifact = await identifyDemoArtifact(args.outputDir, "reviewed-blender-model", views.data.artifacts.blend);
   const checkpoint = ReviewCheckpointSchema.parse({
     schemaVersion: 1,
     sourceSha,

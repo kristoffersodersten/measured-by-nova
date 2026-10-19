@@ -281,11 +281,13 @@ export function registerMeasurementTools(server: McpServer, config: BlenderConfi
     const project = materializeProfiles(await readProject(config, payload.projectId));
     const viewRegistry = buildOrthographicViewRegistry(project.elements, payload.views);
     const next = { ...project, viewRegistry };
-    const result = await runBlenderJob(config, { mode: "measurement_project", operation: "elevation_views", project: next, views: payload.views }, path.join("measurement-projects", payload.projectId, "artifacts", `${payload.projectId}-views.blend`));
+    const outputBlend = path.join("measurement-projects", payload.projectId, "artifacts", `${payload.projectId}-views.blend`);
+    const result = await runBlenderJob(config, { mode: "measurement_project", operation: "elevation_views", project: next, views: payload.views }, outputBlend);
     if (!result.ok) return fail(req, "view_generation_failed", "Blender failed to generate the declared orthographic view registry.", [result.stderr]);
-    await writeProject(config, next);
+    const reviewProject = { ...next, artifacts: { ...next.artifacts, blend: result.outputPath ?? outputBlend } };
+    await writeProject(config, reviewProject);
     await appendRequestLog(config, payload.projectId, req, "generate_elevation_views", payload);
-    return ok(req, { blender: result, viewRegistry });
+    return ok(req, { blender: result, viewRegistry, artifacts: reviewProject.artifacts });
   });
 
   register(server, "export_model", "Export the measured project model as blend, GLB, OBJ, and/or USDZ artifacts.", ExportMeasuredModelSchema, async (input) => {
