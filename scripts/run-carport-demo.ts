@@ -45,7 +45,6 @@ const ReviewCheckpointSchema = z.object({
   failClosedProof: z.object({ observedErrorCode: z.literal("capture_contract_failed"), blockerId: z.literal("width"), recoverySucceeded: z.literal(true) }).strict(),
   timingsMs: z.record(z.number().int().nonnegative())
 }).strict();
-type ReviewCheckpoint = z.infer<typeof ReviewCheckpointSchema>;
 
 export function parseDemoArguments(argv: string[]): DemoArguments {
   let outputDir = DefaultOutputDir;
