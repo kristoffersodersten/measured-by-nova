@@ -10,11 +10,12 @@ type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: bo
 
 describe("orthographic review artifact runtime", () => {
   it("promotes the generated view BLEND as the exact human-review and lock source", async () => {
+    if (!process.env.BLENDER_PATH) throw new Error("BLENDER_PATH is required for the elevation-view integration test.");
     const outputDir = await mkdtemp(path.join(os.tmpdir(), "nova-view-review-"));
     const capture = RealCarportCaptureSchema.parse(JSON.parse(await readFile("fixtures/real-capture-carport-minimal.json", "utf8")));
     const tools = new Map<string, (input: unknown) => Promise<ToolResult>>();
     const server = { tool(name: string, _description: string, _shape: unknown, handler: (input: unknown) => Promise<ToolResult>) { tools.set(name, handler); } } as unknown as McpServer;
-    registerMeasurementTools(server, { outputDir, timeoutMs: 120_000 });
+    registerMeasurementTools(server, { outputDir, timeoutMs: 120_000, blenderPath: process.env.BLENDER_PATH });
 
     expect((await tools.get("create_project_from_capture")!(capture)).isError).toBe(false);
     expect((await tools.get("generate_measured_model")!({ projectId: capture.projectId })).isError).toBe(false);
