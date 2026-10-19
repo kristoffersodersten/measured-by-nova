@@ -18,7 +18,10 @@ describe("orthographic review artifact runtime", () => {
     registerMeasurementTools(server, { outputDir, timeoutMs: 120_000, blenderPath: process.env.BLENDER_PATH });
 
     expect((await tools.get("create_project_from_capture")!(capture)).isError).toBe(false);
-    expect((await tools.get("generate_measured_model")!({ projectId: capture.projectId })).isError).toBe(false);
+    const generated = await tools.get("generate_measured_model")!({ projectId: capture.projectId });
+    expect(generated.isError, generated.content[0].text).toBe(false);
+    const generatedBody = JSON.parse(generated.content[0].text) as { data: { artifacts: { blend: string } } };
+    expect(generatedBody.data.artifacts.blend).toBe(`measurement-projects/${capture.projectId}/artifacts/${capture.projectId}.blend`);
     const views = await tools.get("generate_elevation_views")!({ projectId: capture.projectId, views: ["plan", "north", "south", "east", "west", "section_a_a"] });
     expect(views.isError, views.content[0].text).toBe(false);
     const body = JSON.parse(views.content[0].text) as { data: { artifacts: { blend: string }; viewRegistry: { views: Array<{ name: string }> } } };
