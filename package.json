@@ -57,6 +57,7 @@
     "audit:security": "pnpm audit --audit-level high",
     "benchmark": "node dist/scripts/run-performance-benchmark.js",
     "benchmark:xray": "node --cpu-prof --cpu-prof-dir=evidence --cpu-prof-name=performance.cpuprofile dist/scripts/run-performance-benchmark.js",
+    "demo:carport": "tsx scripts/run-carport-demo.ts",
     "release:verify": "node dist/scripts/verify-release.js",
     "build": "tsc -p tsconfig.build.json && mkdir -p dist/blender && cp blender/*.py dist/blender/",
     "dev": "tsx src/server.ts",
