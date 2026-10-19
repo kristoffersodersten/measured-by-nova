@@ -25,17 +25,19 @@ export const OrthographicViewRegistrySchema = z.object({
 }).strict();
 export type OrthographicViewRegistry = z.infer<typeof OrthographicViewRegistrySchema>;
 
-type BoundsElement = { boundsMm: { x: number; y: number; z: number; width: number; depth: number; height: number } };
+type BoundsElement = { kind?: string; boundsMm: { x: number; y: number; z: number; width: number; depth: number; height: number } };
 const ViewOrder: OrthographicViewName[] = ["plan", "north", "south", "east", "west", "section_a_a"];
 
 export function buildOrthographicViewRegistry(elements: BoundsElement[], requested: OrthographicViewName[]): OrthographicViewRegistry {
   if (elements.length === 0) throw new Error("Cannot build orthographic view registry without measured geometry.");
-  const minX = Math.min(...elements.map((element) => element.boundsMm.x));
-  const minY = Math.min(...elements.map((element) => element.boundsMm.y));
-  const minZ = Math.min(...elements.map((element) => element.boundsMm.z));
-  const maxX = Math.max(...elements.map((element) => element.boundsMm.x + element.boundsMm.width));
-  const maxY = Math.max(...elements.map((element) => element.boundsMm.y + element.boundsMm.depth));
-  const maxZ = Math.max(...elements.map((element) => element.boundsMm.z + element.boundsMm.height));
+  const measuredGeometry = elements.filter((element) => element.kind !== "context");
+  const framingElements = measuredGeometry.length > 0 ? measuredGeometry : elements;
+  const minX = Math.min(...framingElements.map((element) => element.boundsMm.x));
+  const minY = Math.min(...framingElements.map((element) => element.boundsMm.y));
+  const minZ = Math.min(...framingElements.map((element) => element.boundsMm.z));
+  const maxX = Math.max(...framingElements.map((element) => element.boundsMm.x + element.boundsMm.width));
+  const maxY = Math.max(...framingElements.map((element) => element.boundsMm.y + element.boundsMm.depth));
+  const maxZ = Math.max(...framingElements.map((element) => element.boundsMm.z + element.boundsMm.height));
   const center: [number, number, number] = [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2];
   const span = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 1000);
   const distance = span * 1.5;

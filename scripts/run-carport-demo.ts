@@ -18,7 +18,9 @@ const AllowedDemoChanges = [
   "package.json",
   "scripts/run-carport-demo.ts",
   "src/demoManifest.ts",
-  "tests/carportDemo.test.ts"
+  "src/viewRegistry.ts",
+  "tests/carportDemo.test.ts",
+  "tests/viewRegistry.test.ts"
 ] as const;
 const FixturePath = "fixtures/real-capture-carport-minimal.json";
 const DefaultOutputDir = "output/carport-premium-demo";
