@@ -15,6 +15,7 @@ const LegalBaseSha = "58e6cc3a349c25af17763ab76f4a1a0c889e3e9f";
 const UnauthorizedSignerRootSha = "79067d23e11f7ff979bd7b2c0409b3f72c00dd1c";
 const AllowedDemoChanges = [
   "docs/carport-premium-demo.md",
+  "eslint.config.js",
   "package.json",
   "scripts/run-carport-demo.ts",
   "src/demoManifest.ts",

@@ -5,7 +5,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
-    ignores: ["dist/**", "node_modules/**", "eslint.config.js"]
+    ignores: ["dist/**", "node_modules/**", "output/**", "outputs/**", "eslint.config.js"]
   },
   {
     languageOptions: {
