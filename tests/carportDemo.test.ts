@@ -33,11 +33,12 @@ describe("carport premium demo support", () => {
     await writeFile(path.join(outputDir, "delivery", "model.glb"), Buffer.from("glTFdemo"));
     const artifact = await identifyDemoArtifact(outputDir, "portable-glb", "delivery/model.glb");
     const hash = "a".repeat(64);
+    const gitSha = "b".repeat(40);
     const manifest = CarportDemoManifestSchema.parse({
       schemaVersion: 1,
       manifestType: "measured-carport-premium-demo",
       createdAt: "2026-10-19T00:00:00.000Z",
-      source: { sourceSha: hash, legalBaseSha: hash, legalBaseIncluded: true, unauthorizedSignerCommitIncluded: false, unauthorizedSignerToolExposed: false },
+      source: { sourceSha: gitSha, legalBaseSha: gitSha, legalBaseIncluded: true, unauthorizedSignerCommitIncluded: false, unauthorizedSignerToolExposed: false },
       fixture: { path: "fixtures/real-capture-carport-minimal.json", sha256: hash, captureId: "capture", projectId: "project" },
       failClosedProof: { attemptedField: "dimensions.width", expectedErrorCode: "capture_contract_failed", observedErrorCode: "capture_contract_failed", blockerId: "width", recoverySucceeded: true },
       humanReview: { reviewer: "Kristoffer", confirmation: "reviewed-generated-blend-before-lock" },

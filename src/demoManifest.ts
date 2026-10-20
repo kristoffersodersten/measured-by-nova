@@ -5,6 +5,7 @@ import { z } from "zod";
 import { safeOutputPath } from "./blenderRunner.js";
 
 const HashSchema = z.string().regex(/^[a-f0-9]{64}$/);
+const GitShaSchema = z.string().regex(/^[a-f0-9]{40}$/);
 const RelativePathSchema = z.string().min(1).max(500).refine((value) => !path.isAbsolute(value) && !value.split(/[\\/]/).includes(".."));
 
 export const CarportDemoManifestSchema = z.object({
@@ -12,8 +13,8 @@ export const CarportDemoManifestSchema = z.object({
   manifestType: z.literal("measured-carport-premium-demo"),
   createdAt: z.string().datetime({ offset: true }),
   source: z.object({
-    sourceSha: HashSchema,
-    legalBaseSha: HashSchema,
+    sourceSha: GitShaSchema,
+    legalBaseSha: GitShaSchema,
     legalBaseIncluded: z.literal(true),
     unauthorizedSignerCommitIncluded: z.literal(false),
     unauthorizedSignerToolExposed: z.literal(false)
